@@ -1,5 +1,7 @@
-using DocumentProcessor.Web.Client.Pages;
+using DocumentProcessor.Infrastructure;
+using DocumentProcessor.Infrastructure.Data;
 using DocumentProcessor.Web.Components;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,7 +10,23 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents()
     .AddInteractiveWebAssemblyComponents();
 
+// Add infrastructure services (Database, Repositories, Document Sources)
+builder.Services.AddInfrastructureServices(builder.Configuration);
+
+// Add health checks
+builder.Services.AddInfrastructureHealthChecks(builder.Configuration);
+
+// Add additional logging if needed
+builder.Services.AddLogging(logging =>
+{
+    logging.AddConsole();
+    logging.AddDebug();
+});
+
 var app = builder.Build();
+
+// Ensure database is created and migrations are applied
+await app.Services.EnsureDatabaseAsync();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
