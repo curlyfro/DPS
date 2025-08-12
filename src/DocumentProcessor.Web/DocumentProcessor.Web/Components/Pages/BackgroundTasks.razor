@@ -1,0 +1,213 @@
+@page "/background-tasks"
+@using DocumentProcessor.Application.Services
+@using DocumentProcessor.Core.Interfaces
+@inject IBackgroundDocumentProcessingService BackgroundService
+@inject IBackgroundTaskQueue TaskQueue
+@inject ILogger<BackgroundTasks> Logger
+@rendermode InteractiveServer
+
+<PageTitle>Background Tasks</PageTitle>
+
+<h1>Background Task Monitor</h1>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Queue Length</h5>
+                <p class="card-text display-4">@queueLength</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Processing</h5>
+                <p class="card-text display-4">@processingCount</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Completed</h5>
+                <p class="card-text display-4">@completedCount</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Failed</h5>
+                <p class="card-text display-4">@failedCount</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Recent Tasks</h5>
+            </div>
+            <div class="card-body">
+                @if (!taskStatuses.Any())
+                {
+                    <p class="text-muted">No tasks in the system yet.</p>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Task ID</th>
+                                    <th>Status</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var task in taskStatuses.Take(20))
+                                {
+                                    <tr>
+                                        <td><code>@task.TaskId</code></td>
+                                        <td>
+                                            <span class="badge @GetStatusBadgeClass(task.Status)">
+                                                @task.Status
+                                            </span>
+                                        </td>
+                                        <td>@task.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                                        <td>
+                                            @if (task.Status == BackgroundTaskStatus.Failed)
+                                            {
+                                                <button class="btn btn-sm btn-warning" 
+                                                        @onclick="() => RetryTask(task.TaskId)">
+                                                    Retry
+                                                </button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <button class="btn btn-primary" @onclick="RefreshStatus">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+        <button class="btn btn-secondary" @onclick="SimulateTask">
+            <i class="bi bi-plus-circle"></i> Simulate Task
+        </button>
+    </div>
+</div>
+
+@code {
+    private int queueLength = 0;
+    private int processingCount = 0;
+    private int completedCount = 0;
+    private int failedCount = 0;
+    private List<TaskStatusInfo> taskStatuses = new();
+    private System.Threading.Timer? refreshTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshStatus();
+        
+        // Set up auto-refresh timer
+        refreshTimer = new System.Threading.Timer(
+            async _ => await InvokeAsync(RefreshStatus),
+            null,
+            TimeSpan.FromSeconds(5),
+            TimeSpan.FromSeconds(5));
+    }
+
+    private async Task RefreshStatus()
+    {
+        try
+        {
+            queueLength = await BackgroundService.GetQueueLengthAsync();
+            
+            // In a real implementation, you would query actual task statuses
+            // This is simplified for demonstration
+            processingCount = taskStatuses.Count(t => t.Status == BackgroundTaskStatus.Processing);
+            completedCount = taskStatuses.Count(t => t.Status == BackgroundTaskStatus.Completed);
+            failedCount = taskStatuses.Count(t => t.Status == BackgroundTaskStatus.Failed);
+            
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error refreshing task status");
+        }
+    }
+
+    private async Task SimulateTask()
+    {
+        var taskId = Guid.NewGuid().ToString();
+        
+        await TaskQueue.QueueBackgroundWorkItemAsync(
+            async (ct) =>
+            {
+                // Simulate some work
+                await Task.Delay(Random.Shared.Next(1000, 5000), ct);
+                
+                // Randomly fail some tasks for demonstration
+                if (Random.Shared.Next(0, 10) > 7)
+                {
+                    throw new Exception("Simulated failure");
+                }
+            },
+            taskId,
+            Random.Shared.Next(0, 10));
+        
+        taskStatuses.Insert(0, new TaskStatusInfo
+        {
+            TaskId = taskId,
+            Status = BackgroundTaskStatus.Queued,
+            CreatedAt = DateTime.UtcNow
+        });
+        
+        await RefreshStatus();
+    }
+
+    private async Task RetryTask(string taskId)
+    {
+        // In a real implementation, you would re-queue the failed task
+        Logger.LogInformation("Retrying task {TaskId}", taskId);
+        await SimulateTask();
+    }
+
+    private string GetStatusBadgeClass(BackgroundTaskStatus status)
+    {
+        return status switch
+        {
+            BackgroundTaskStatus.Queued => "bg-secondary",
+            BackgroundTaskStatus.Processing => "bg-primary",
+            BackgroundTaskStatus.Completed => "bg-success",
+            BackgroundTaskStatus.Failed => "bg-danger",
+            BackgroundTaskStatus.Cancelled => "bg-warning",
+            _ => "bg-light"
+        };
+    }
+
+    public void Dispose()
+    {
+        refreshTimer?.Dispose();
+    }
+
+    private class TaskStatusInfo
+    {
+        public string TaskId { get; set; } = string.Empty;
+        public BackgroundTaskStatus Status { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+}

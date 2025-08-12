@@ -1,0 +1,390 @@
+@page "/dashboard"
+@using DocumentProcessor.Core.Entities
+@using DocumentProcessor.Core.Interfaces
+@using DocumentProcessor.Application.Services
+@using Microsoft.AspNetCore.Components.Web.Virtualization
+@inject IDocumentRepository DocumentRepository
+@inject IBackgroundDocumentProcessingService BackgroundService
+@inject IDocumentProcessingService ProcessingService
+@inject ILogger<Dashboard> Logger
+@rendermode InteractiveServer
+@implements IDisposable
+
+<PageTitle>Dashboard</PageTitle>
+
+<h1>Document Processing Dashboard</h1>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <h5 class="card-title">Total Documents</h5>
+                <h2 class="display-4">@stats.TotalDocuments</h2>
+                <p class="card-text">All uploaded documents</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <h5 class="card-title">Processed</h5>
+                <h2 class="display-4">@stats.ProcessedDocuments</h2>
+                <p class="card-text">Successfully processed</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-warning">
+            <div class="card-body">
+                <h5 class="card-title">In Queue</h5>
+                <h2 class="display-4">@stats.QueuedDocuments</h2>
+                <p class="card-text">Waiting to process</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-danger">
+            <div class="card-body">
+                <h5 class="card-title">Failed</h5>
+                <h2 class="display-4">@stats.FailedDocuments</h2>
+                <p class="card-text">Processing failed</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5>Processing Activity (Last 7 Days)</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="activityChart" style="height: 300px;"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>Document Types</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="typeChart" style="height: 300px;"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5>Recent Documents</h5>
+                <button class="btn btn-sm btn-primary" @onclick="RefreshData">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                </button>
+            </div>
+            <div class="card-body">
+                @if (recentDocuments == null)
+                {
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                }
+                else if (!recentDocuments.Any())
+                {
+                    <p class="text-muted">No documents found.</p>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>File Name</th>
+                                    <th>Type</th>
+                                    <th>Size</th>
+                                    <th>Status</th>
+                                    <th>Uploaded</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var doc in recentDocuments.Take(10))
+                                {
+                                    <tr>
+                                        <td>
+                                            <a href="/document/@doc.Id">@doc.OriginalFileName</a>
+                                        </td>
+                                        <td>@doc.FileExtension</td>
+                                        <td>@FormatFileSize(doc.FileSize)</td>
+                                        <td>
+                                            <span class="badge @GetStatusBadgeClass(doc.Status)">
+                                                @doc.Status
+                                            </span>
+                                        </td>
+                                        <td>@doc.UploadedAt.ToString("MM/dd HH:mm")</td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                <a href="/document/@doc.Id" class="btn btn-outline-primary">
+                                                    <i class="bi bi-eye"></i>
+                                                </a>
+                                                @if (doc.Status == DocumentStatus.Pending)
+                                                {
+                                                    <button class="btn btn-outline-success" 
+                                                            @onclick="() => ProcessDocument(doc.Id)">
+                                                        <i class="bi bi-play"></i>
+                                                    </button>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Processing Queue Status</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label>Queue Length: <strong>@queueLength</strong></label>
+                    <div class="progress" style="height: 25px;">
+                        <div class="progress-bar @GetQueueProgressClass()" 
+                             role="progressbar" 
+                             style="width: @GetQueuePercentage()%"
+                             aria-valuenow="@queueLength" 
+                             aria-valuemin="0" 
+                             aria-valuemax="100">
+                            @queueLength / 100
+                        </div>
+                    </div>
+                </div>
+                
+                @if (processingQueue != null && processingQueue.Any())
+                {
+                    <h6>Currently Processing:</h6>
+                    <ul class="list-group">
+                        @foreach (var item in processingQueue.Take(5))
+                        {
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span>@item.DocumentName</span>
+                                <span class="badge bg-primary rounded-pill">@item.Priority</span>
+                            </li>
+                        }
+                    </ul>
+                }
+                else
+                {
+                    <p class="text-muted">No documents currently processing.</p>
+                }
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>System Health</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between">
+                        <span>Database Connection</span>
+                        <span class="badge bg-success">Healthy</span>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between">
+                        <span>Storage Provider</span>
+                        <span class="badge bg-success">@storageProvider</span>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between">
+                        <span>AI Processor</span>
+                        <span class="badge bg-success">@aiProvider</span>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between">
+                        <span>Background Service</span>
+                        <span class="badge @(queueLength > 0 ? "bg-success" : "bg-secondary")">
+                            @(queueLength > 0 ? "Active" : "Idle")
+                        </span>
+                    </div>
+                </div>
+                <hr />
+                <div class="mb-3">
+                    <label>Storage Usage</label>
+                    <div class="progress" style="height: 20px;">
+                        <div class="progress-bar bg-info" 
+                             role="progressbar" 
+                             style="width: @storageUsagePercent%">
+                            @FormatFileSize(storageUsed) / @FormatFileSize(storageTotal)
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private DashboardStats stats = new();
+    private List<Document>? recentDocuments;
+    private List<QueueItemInfo> processingQueue = new();
+    private int queueLength = 0;
+    private string storageProvider = "LocalFileSystem";
+    private string aiProvider = "Mock";
+    private long storageUsed = 0;
+    private long storageTotal = 10737418240; // 10GB
+    private int storageUsagePercent => (int)((storageUsed / (double)storageTotal) * 100);
+    private System.Threading.Timer? refreshTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardData();
+        
+        // Set up auto-refresh
+        refreshTimer = new System.Threading.Timer(
+            async _ => await InvokeAsync(RefreshData),
+            null,
+            TimeSpan.FromSeconds(10),
+            TimeSpan.FromSeconds(10));
+    }
+
+    private async Task LoadDashboardData()
+    {
+        try
+        {
+            // Load statistics
+            var allDocuments = await DocumentRepository.GetAllAsync();
+            stats.TotalDocuments = allDocuments.Count();
+            stats.ProcessedDocuments = allDocuments.Count(d => 
+                d.Status == DocumentStatus.Processed || d.Status == DocumentStatus.Completed);
+            stats.QueuedDocuments = allDocuments.Count(d => 
+                d.Status == DocumentStatus.Queued || d.Status == DocumentStatus.Processing);
+            stats.FailedDocuments = allDocuments.Count(d => d.Status == DocumentStatus.Failed);
+
+            // Load recent documents
+            recentDocuments = allDocuments
+                .OrderByDescending(d => d.UploadedAt)
+                .Take(10)
+                .ToList();
+
+            // Calculate storage used
+            storageUsed = allDocuments.Sum(d => d.FileSize);
+
+            // Load queue status
+            queueLength = await BackgroundService.GetQueueLengthAsync();
+            
+            // Simulate processing queue items
+            var queuedDocs = allDocuments
+                .Where(d => d.Status == DocumentStatus.Queued || d.Status == DocumentStatus.Processing)
+                .Take(5)
+                .Select(d => new QueueItemInfo 
+                { 
+                    DocumentName = d.OriginalFileName,
+                    Priority = ProcessingPriority.Normal
+                })
+                .ToList();
+            processingQueue = queuedDocs;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading dashboard data");
+        }
+    }
+
+    private async Task RefreshData()
+    {
+        await LoadDashboardData();
+        StateHasChanged();
+    }
+
+    private async Task ProcessDocument(Guid documentId)
+    {
+        try
+        {
+            await ProcessingService.QueueDocumentForProcessingAsync(documentId);
+            await RefreshData();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error queuing document {DocumentId}", documentId);
+        }
+    }
+
+    private string GetStatusBadgeClass(DocumentStatus status)
+    {
+        return status switch
+        {
+            DocumentStatus.Pending => "bg-secondary",
+            DocumentStatus.Queued => "bg-info",
+            DocumentStatus.Processing => "bg-primary",
+            DocumentStatus.Processed => "bg-success",
+            DocumentStatus.Completed => "bg-success",
+            DocumentStatus.Failed => "bg-danger",
+            DocumentStatus.Archived => "bg-dark",
+            _ => "bg-light"
+        };
+    }
+
+    private string GetQueueProgressClass()
+    {
+        if (queueLength == 0) return "bg-success";
+        if (queueLength < 25) return "bg-info";
+        if (queueLength < 50) return "bg-warning";
+        return "bg-danger";
+    }
+
+    private int GetQueuePercentage()
+    {
+        return Math.Min(100, queueLength);
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB", "TB" };
+        int order = 0;
+        double size = bytes;
+        while (size >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            size = size / 1024;
+        }
+        return $"{size:0.##} {sizes[order]}";
+    }
+
+    public void Dispose()
+    {
+        refreshTimer?.Dispose();
+    }
+
+    private class DashboardStats
+    {
+        public int TotalDocuments { get; set; }
+        public int ProcessedDocuments { get; set; }
+        public int QueuedDocuments { get; set; }
+        public int FailedDocuments { get; set; }
+    }
+
+    private class QueueItemInfo
+    {
+        public string DocumentName { get; set; } = string.Empty;
+        public ProcessingPriority Priority { get; set; }
+    }
+}

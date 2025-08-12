@@ -1,6 +1,8 @@
 using DocumentProcessor.Infrastructure;
 using DocumentProcessor.Infrastructure.Data;
 using DocumentProcessor.Web.Components;
+using DocumentProcessor.Web.Hubs;
+using DocumentProcessor.Web.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,6 +11,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents()
     .AddInteractiveWebAssemblyComponents();
+
+// Add SignalR
+builder.Services.AddSignalR();
+
+// Add notification service
+builder.Services.AddScoped<INotificationService, NotificationService>();
 
 // Add infrastructure services (Database, Repositories, Document Sources)
 builder.Services.AddInfrastructureServices(builder.Configuration);
@@ -50,5 +58,8 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode()
     .AddInteractiveWebAssemblyRenderMode()
     .AddAdditionalAssemblies(typeof(DocumentProcessor.Web.Client._Imports).Assembly);
+
+// Map SignalR hub
+app.MapHub<DocumentProcessingHub>("/documentHub");
 
 app.Run();

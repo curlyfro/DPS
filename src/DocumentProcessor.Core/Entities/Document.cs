@@ -49,6 +49,7 @@ namespace DocumentProcessor.Core.Entities
         Queued,
         Processing,
         Processed,
+        Completed,
         Failed,
         Archived
     }

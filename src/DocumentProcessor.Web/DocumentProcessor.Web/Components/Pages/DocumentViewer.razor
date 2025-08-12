@@ -1,0 +1,314 @@
+@page "/document/{DocumentId:guid}"
+@using DocumentProcessor.Core.Entities
+@using DocumentProcessor.Core.Interfaces
+@using DocumentProcessor.Application.Services
+@inject IDocumentRepository DocumentRepository
+@inject IDocumentProcessingService ProcessingService
+@inject NavigationManager Navigation
+@inject ILogger<DocumentViewer> Logger
+@rendermode InteractiveServer
+
+<PageTitle>Document Details</PageTitle>
+
+@if (document == null)
+{
+    <div class="d-flex justify-content-center">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    <div class="container-fluid">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/">Home</a></li>
+                <li class="breadcrumb-item"><a href="/documents">Documents</a></li>
+                <li class="breadcrumb-item active" aria-current="page">@document.OriginalFileName</li>
+            </ol>
+        </nav>
+
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h4>@document.OriginalFileName</h4>
+                        <span class="badge @GetStatusBadgeClass(document.Status)">@document.Status</span>
+                    </div>
+                    <div class="card-body">
+                        @if (!string.IsNullOrEmpty(document.ExtractedText))
+                        {
+                            <div class="document-content">
+                                <h5>Extracted Content</h5>
+                                <div class="border p-3 bg-light" style="max-height: 400px; overflow-y: auto;">
+                                    <pre>@document.ExtractedText</pre>
+                                </div>
+                            </div>
+                        }
+                        
+                        @if (!string.IsNullOrEmpty(document.Summary))
+                        {
+                            <div class="document-summary mt-4">
+                                <h5>AI Generated Summary</h5>
+                                <div class="alert alert-info">
+                                    @document.Summary
+                                </div>
+                            </div>
+                        }
+
+                        @if (processingResult != null)
+                        {
+                            <div class="processing-results mt-4">
+                                <h5>Processing Results</h5>
+                                
+                                @if (processingResult.Classification != null)
+                                {
+                                    <div class="mb-3">
+                                        <h6>Classification</h6>
+                                        <div class="row">
+                                            <div class="col-md-12">
+                                                <strong>Primary Category:</strong> @processingResult.Classification.PrimaryCategory
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+
+                                @if (processingResult.Extraction != null && processingResult.Extraction.ExtractedData.Any())
+                                {
+                                    <div class="mb-3">
+                                        <h6>Extracted Data</h6>
+                                        <table class="table table-sm">
+                                            <thead>
+                                                <tr>
+                                                    <th>Field</th>
+                                                    <th>Value</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var data in processingResult.Extraction.ExtractedData)
+                                                {
+                                                    <tr>
+                                                        <td><strong>@data.Key</strong></td>
+                                                        <td>@data.Value</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                }
+
+                                @if (processingResult.Intent != null)
+                                {
+                                    <div class="mb-3">
+                                        <h6>Detected Intent</h6>
+                                        <div class="alert alert-light">
+                                            <strong>Primary Intent:</strong> @processingResult.Intent.PrimaryIntent<br />
+                                            <strong>Confidence:</strong> @((processingResult.Intent.Confidence * 100).ToString("F0"))%
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5>Document Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row">
+                            <dt class="col-sm-5">File Name:</dt>
+                            <dd class="col-sm-7">@document.OriginalFileName</dd>
+
+                            <dt class="col-sm-5">File Type:</dt>
+                            <dd class="col-sm-7">@document.FileExtension</dd>
+
+                            <dt class="col-sm-5">File Size:</dt>
+                            <dd class="col-sm-7">@FormatFileSize(document.FileSize)</dd>
+
+                            <dt class="col-sm-5">Upload Date:</dt>
+                            <dd class="col-sm-7">@document.UploadedAt.ToString("yyyy-MM-dd HH:mm")</dd>
+
+                            <dt class="col-sm-5">Uploaded By:</dt>
+                            <dd class="col-sm-7">@document.UploadedBy</dd>
+
+                            @if (document.ProcessedAt.HasValue)
+                            {
+                                <dt class="col-sm-5">Processed Date:</dt>
+                                <dd class="col-sm-7">@document.ProcessedAt.Value.ToString("yyyy-MM-dd HH:mm")</dd>
+                            }
+
+                            <dt class="col-sm-5">Source:</dt>
+                            <dd class="col-sm-7">@document.Source</dd>
+
+                            @if (document.DocumentType != null)
+                            {
+                                <dt class="col-sm-5">Document Type:</dt>
+                                <dd class="col-sm-7">@document.DocumentType.Name</dd>
+                            }
+                        </dl>
+                    </div>
+                </div>
+
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5>Actions</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (document.Status == DocumentStatus.Pending || document.Status == DocumentStatus.Failed)
+                        {
+                            <button class="btn btn-primary w-100 mb-2" @onclick="ProcessDocument" disabled="@isProcessing">
+                                @if (isProcessing)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                }
+                                Process Document
+                            </button>
+                        }
+
+                        <button class="btn btn-outline-secondary w-100 mb-2" @onclick="DownloadDocument">
+                            <i class="bi bi-download"></i> Download
+                        </button>
+
+                        <button class="btn btn-outline-info w-100 mb-2" @onclick="ViewMetadata">
+                            <i class="bi bi-info-circle"></i> View Metadata
+                        </button>
+
+                        @if (document.Status == DocumentStatus.Processed || document.Status == DocumentStatus.Completed)
+                        {
+                            <button class="btn btn-outline-success w-100 mb-2" @onclick="ExportResults">
+                                <i class="bi bi-file-earmark-arrow-down"></i> Export Results
+                            </button>
+                        }
+
+                        <button class="btn btn-outline-danger w-100" @onclick="DeleteDocument">
+                            <i class="bi bi-trash"></i> Delete
+                        </button>
+                    </div>
+                </div>
+
+                @if (document.Classifications?.Any() == true)
+                {
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>Classifications</h5>
+                        </div>
+                        <div class="card-body">
+                            @foreach (var classification in document.Classifications)
+                            {
+                                <div class="mb-2">
+                                    <span class="badge bg-primary">@classification.DocumentType?.Name</span>
+                                    <small class="text-muted">(@((classification.ConfidenceScore * 100).ToString("F0"))%)</small>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid DocumentId { get; set; }
+
+    private Document? document;
+    private DocumentProcessingResult? processingResult;
+    private bool isProcessing = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDocument();
+    }
+
+    private async Task LoadDocument()
+    {
+        try
+        {
+            document = await DocumentRepository.GetByIdAsync(DocumentId);
+            if (document == null)
+            {
+                Navigation.NavigateTo("/documents");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading document {DocumentId}", DocumentId);
+        }
+    }
+
+    private async Task ProcessDocument()
+    {
+        if (document == null || isProcessing) return;
+
+        isProcessing = true;
+        try
+        {
+            processingResult = await ProcessingService.ProcessDocumentAsync(DocumentId);
+            await LoadDocument(); // Reload to get updated status
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error processing document {DocumentId}", DocumentId);
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private async Task DownloadDocument()
+    {
+        // Implement download logic
+        Logger.LogInformation("Download requested for document {DocumentId}", DocumentId);
+    }
+
+    private void ViewMetadata()
+    {
+        Navigation.NavigateTo($"/document/{DocumentId}/metadata");
+    }
+
+    private void ExportResults()
+    {
+        // Implement export logic
+        Logger.LogInformation("Export requested for document {DocumentId}", DocumentId);
+    }
+
+    private async Task DeleteDocument()
+    {
+        // Implement delete confirmation and logic
+        Logger.LogInformation("Delete requested for document {DocumentId}", DocumentId);
+    }
+
+    private string GetStatusBadgeClass(DocumentStatus status)
+    {
+        return status switch
+        {
+            DocumentStatus.Pending => "bg-secondary",
+            DocumentStatus.Queued => "bg-info",
+            DocumentStatus.Processing => "bg-primary",
+            DocumentStatus.Processed => "bg-success",
+            DocumentStatus.Completed => "bg-success",
+            DocumentStatus.Failed => "bg-danger",
+            DocumentStatus.Archived => "bg-dark",
+            _ => "bg-light"
+        };
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB", "TB" };
+        int order = 0;
+        double size = bytes;
+        while (size >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            size = size / 1024;
+        }
+        return $"{size:0.##} {sizes[order]}";
+    }
+}

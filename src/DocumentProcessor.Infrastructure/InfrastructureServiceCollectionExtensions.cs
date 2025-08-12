@@ -1,5 +1,6 @@
 using DocumentProcessor.Core.Interfaces;
 using DocumentProcessor.Infrastructure.AI;
+using DocumentProcessor.Infrastructure.BackgroundTasks;
 using DocumentProcessor.Infrastructure.Data;
 using DocumentProcessor.Infrastructure.Providers;
 using DocumentProcessor.Infrastructure.Repositories;
@@ -7,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace DocumentProcessor.Infrastructure
@@ -48,6 +50,25 @@ namespace DocumentProcessor.Infrastructure
                 bedrockSection.Bind(options);
             });
             services.AddSingleton<MockAIProcessor>();
+            
+            // Register background task services
+            var usePriorityQueue = configuration.GetValue<bool>("BackgroundTasks:UsePriorityQueue", true);
+            if (usePriorityQueue)
+            {
+                services.AddSingleton<IBackgroundTaskQueue, PriorityBackgroundTaskQueue>();
+            }
+            else
+            {
+                services.AddSingleton<IBackgroundTaskQueue, BackgroundTaskQueue>();
+            }
+            
+            // Register hosted services
+            var maxConcurrency = configuration.GetValue<int>("BackgroundTasks:MaxConcurrency", 3);
+            services.AddHostedService<DocumentProcessingHostedService>(provider =>
+                new DocumentProcessingHostedService(
+                    provider.GetRequiredService<IBackgroundTaskQueue>(),
+                    provider.GetRequiredService<ILogger<DocumentProcessingHostedService>>(),
+                    maxConcurrency));
             
             // Note: IDocumentProcessingService is registered in the Application layer
 

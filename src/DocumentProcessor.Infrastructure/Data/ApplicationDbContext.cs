@@ -21,6 +21,8 @@ namespace DocumentProcessor.Infrastructure.Data
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+            
+            base.OnModelCreating(modelBuilder);
 
             // Configure Document entity
             modelBuilder.Entity<Document>(entity =>
