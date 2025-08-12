@@ -1,6 +1,7 @@
 using DocumentProcessor.Core.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace DocumentProcessor.Infrastructure.AI
 {
@@ -8,20 +9,35 @@ namespace DocumentProcessor.Infrastructure.AI
     {
         private readonly IConfiguration _configuration;
         private readonly ILogger<AIProcessorFactory> _logger;
+        private readonly ILoggerFactory _loggerFactory;
         private readonly Dictionary<AIProviderType, Func<IAIProcessor>> _processorFactories;
 
-        public AIProcessorFactory(IConfiguration configuration, ILogger<AIProcessorFactory> logger)
+        public AIProcessorFactory(
+            IConfiguration configuration,
+            ILogger<AIProcessorFactory> logger,
+            ILoggerFactory loggerFactory)
         {
             _configuration = configuration;
             _logger = logger;
+            _loggerFactory = loggerFactory;
             
             _processorFactories = new Dictionary<AIProviderType, Func<IAIProcessor>>
             {
                 [AIProviderType.Mock] = () => new MockAIProcessor(),
+                [AIProviderType.AmazonBedrock] = () => CreateBedrockProcessor(),
                 // Future providers will be registered here
-                // [AIProviderType.AmazonBedrock] = () => new BedrockAIProcessor(_configuration, _logger),
                 // [AIProviderType.OpenAI] = () => new OpenAIProcessor(_configuration, _logger),
             };
+        }
+
+        private IAIProcessor CreateBedrockProcessor()
+        {
+            var bedrockOptions = new BedrockOptions();
+            _configuration.GetSection("Bedrock").Bind(bedrockOptions);
+            
+            return new BedrockAIProcessor(
+                _loggerFactory.CreateLogger<BedrockAIProcessor>(),
+                Options.Create(bedrockOptions));
         }
 
         public IAIProcessor CreateProcessor(AIProviderType providerType)

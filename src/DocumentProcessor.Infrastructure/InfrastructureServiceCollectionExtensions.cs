@@ -40,6 +40,15 @@ namespace DocumentProcessor.Infrastructure
             // Register AI processing services
             services.AddSingleton<IAIProcessorFactory, AIProcessorFactory>();
             services.AddSingleton<IAIProcessingQueue, InMemoryProcessingQueue>();
+            
+            // Register Bedrock configuration
+            var bedrockSection = configuration.GetSection("Bedrock");
+            services.Configure<BedrockOptions>(options =>
+            {
+                bedrockSection.Bind(options);
+            });
+            services.AddSingleton<MockAIProcessor>();
+            
             // Note: IDocumentProcessingService is registered in the Application layer
 
             return services;
