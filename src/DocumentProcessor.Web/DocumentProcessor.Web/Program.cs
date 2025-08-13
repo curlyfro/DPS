@@ -14,8 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents()
-    .AddInteractiveWebAssemblyComponents();
+    .AddInteractiveServerComponents();
 
 // Add SignalR
 builder.Services.AddSignalR();
@@ -119,7 +118,7 @@ await SeedIdentityData(app.Services);
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.UseWebAssemblyDebugging();
+    // Development environment configuration
 }
 else
 {
@@ -144,9 +143,7 @@ app.UseAntiforgery();
 
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode()
-    .AddInteractiveWebAssemblyRenderMode()
-    .AddAdditionalAssemblies(typeof(DocumentProcessor.Web.Client._Imports).Assembly);
+    .AddInteractiveServerRenderMode();
 
 // Map SignalR hub
 app.MapHub<DocumentProcessingHub>("/documentHub");
