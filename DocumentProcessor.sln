@@ -7,7 +7,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "DocumentProcessor.Web", "DocumentProcessor.Web", "{AA075029-EB4A-FFDF-A223-A106D85A998A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DocumentProcessor.Web", "src\DocumentProcessor.Web\DocumentProcessor.Web\DocumentProcessor.Web.csproj", "{AABBB9DE-0F79-4939-852A-F193E4C617B3}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DocumentProcessor.Web", "src\DocumentProcessor.Web\DocumentProcessor.Web.csproj", "{AABBB9DE-0F79-4939-852A-F193E4C617B3}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DocumentProcessor.Core", "src\DocumentProcessor.Core\DocumentProcessor.Core.csproj", "{0EFDC9FD-4399-4BA7-A3DC-54CF469959FA}"
 EndProject
