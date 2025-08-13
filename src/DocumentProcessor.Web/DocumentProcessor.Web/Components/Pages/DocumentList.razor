@@ -2,11 +2,13 @@
 @using DocumentProcessor.Core.Interfaces
 @using DocumentProcessor.Core.Entities
 @using DocumentProcessor.Infrastructure.Repositories
+@using System.Threading
 @inject IDocumentRepository DocumentRepository
 @inject IDocumentSourceProvider DocumentSource
 @inject ILogger<DocumentList> Logger
 @inject NavigationManager Navigation
 @rendermode InteractiveServer
+@implements IDisposable
 
 <PageTitle>Document List</PageTitle>
 
@@ -261,10 +263,27 @@
     private int _currentPage = 1;
     private int _pageSize = 12;
     private int _totalPages = 1;
+    
+    private Timer? _refreshTimer;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadDocuments();
+        
+        // Set up auto-refresh every 5 seconds to check for processing updates
+        _refreshTimer = new Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                // Only refresh if there are pending/processing documents
+                if (_documents.Any(d => d.Status == DocumentStatus.Pending ||
+                                      d.Status == DocumentStatus.Processing ||
+                                      d.Status == DocumentStatus.Queued))
+                {
+                    await LoadDocuments();
+                }
+            });
+        }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
     }
 
     private async Task LoadDocuments()
@@ -486,10 +505,16 @@
         return status switch
         {
             DocumentStatus.Pending => "warning",
+            DocumentStatus.Queued => "primary",
             DocumentStatus.Processing => "info",
             DocumentStatus.Processed => "success",
             DocumentStatus.Failed => "danger",
             _ => "secondary"
         };
+    }
+    
+    public void Dispose()
+    {
+        _refreshTimer?.Dispose();
     }
 }

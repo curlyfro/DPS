@@ -1,5 +1,6 @@
 using DocumentProcessor.Core.Interfaces;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -10,20 +11,22 @@ namespace DocumentProcessor.Infrastructure.AI
         private readonly IConfiguration _configuration;
         private readonly ILogger<AIProcessorFactory> _logger;
         private readonly ILoggerFactory _loggerFactory;
+        private readonly IServiceProvider _serviceProvider;
         private readonly Dictionary<AIProviderType, Func<IAIProcessor>> _processorFactories;
 
         public AIProcessorFactory(
             IConfiguration configuration,
             ILogger<AIProcessorFactory> logger,
-            ILoggerFactory loggerFactory)
+            ILoggerFactory loggerFactory,
+            IServiceProvider serviceProvider)
         {
             _configuration = configuration;
             _logger = logger;
             _loggerFactory = loggerFactory;
+            _serviceProvider = serviceProvider;
             
             _processorFactories = new Dictionary<AIProviderType, Func<IAIProcessor>>
             {
-                [AIProviderType.Mock] = () => new MockAIProcessor(),
                 [AIProviderType.AmazonBedrock] = () => CreateBedrockProcessor(),
                 // Future providers will be registered here
                 // [AIProviderType.OpenAI] = () => new OpenAIProcessor(_configuration, _logger),
@@ -37,7 +40,8 @@ namespace DocumentProcessor.Infrastructure.AI
             
             return new BedrockAIProcessor(
                 _loggerFactory.CreateLogger<BedrockAIProcessor>(),
-                Options.Create(bedrockOptions));
+                Options.Create(bedrockOptions),
+                _serviceProvider);
         }
 
         public IAIProcessor CreateProcessor(AIProviderType providerType)
@@ -45,7 +49,7 @@ namespace DocumentProcessor.Infrastructure.AI
             if (!_processorFactories.ContainsKey(providerType))
             {
                 _logger.LogWarning($"AI Provider {providerType} not available, falling back to Mock provider");
-                return _processorFactories[AIProviderType.Mock]();
+                return _processorFactories[AIProviderType.AmazonBedrock]();
             }
 
             try
@@ -56,8 +60,8 @@ namespace DocumentProcessor.Infrastructure.AI
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Failed to create AI processor for {providerType}, falling back to Mock");
-                return _processorFactories[AIProviderType.Mock]();
+                _logger.LogError(ex, $"Failed to create AI processor for {providerType}, falling back to AmazonBedrock");
+                return _processorFactories[AIProviderType.AmazonBedrock]();
             }
         }
 
@@ -70,8 +74,8 @@ namespace DocumentProcessor.Infrastructure.AI
                 return CreateProcessor(providerType);
             }
 
-            _logger.LogInformation("No default provider configured, using Mock provider");
-            return CreateProcessor(AIProviderType.Mock);
+            _logger.LogInformation("No default provider configured, using AmazonBedrock provider");
+            return CreateProcessor(AIProviderType.AmazonBedrock);
         }
 
         public IEnumerable<AIProviderType> GetAvailableProviders()

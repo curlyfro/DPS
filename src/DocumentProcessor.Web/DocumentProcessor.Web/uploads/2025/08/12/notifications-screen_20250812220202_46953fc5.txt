@@ -1,0 +1,201 @@
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, FlatList, Image } from 'react-native';
+import Icon from 'react-native-vector-icons/FontAwesome';
+
+// Mock notification data
+const NOTIFICATIONS = [
+  {
+    id: '1',
+    type: 'like',
+    user: {
+      username: 'user1',
+      image: 'https://randomuser.me/api/portraits/women/32.jpg',
+    },
+    content: 'liked your photo',
+    time: '2m',
+    postImage: 'https://images.unsplash.com/photo-1552053831-71594a27632d',
+    isRead: false,
+  },
+  {
+    id: '2',
+    type: 'comment',
+    user: {
+      username: 'user2',
+      image: 'https://randomuser.me/api/portraits/men/44.jpg',
+    },
+    content: 'commented: "Awesome shot!"',
+    time: '15m',
+    postImage: 'https://images.unsplash.com/photo-1552053831-71594a27632d',
+    isRead: false,
+  },
+  {
+    id: '3',
+    type: 'follow',
+    user: {
+      username: 'user3',
+      image: 'https://randomuser.me/api/portraits/women/68.jpg',
+    },
+    content: 'started following you',
+    time: '2h',
+    isRead: true,
+  },
+  {
+    id: '4',
+    type: 'mention',
+    user: {
+      username: 'user4',
+      image: 'https://randomuser.me/api/portraits/men/32.jpg',
+    },
+    content: 'mentioned you in a comment: "Check out @you"',
+    time: '4h',
+    postImage: 'https://images.unsplash.com/photo-1545239351-ef35f43d514b',
+    isRead: true,
+  },
+  {
+    id: '5',
+    type: 'like',
+    user: {
+      username: 'user5',
+      image: 'https://randomuser.me/api/portraits/women/44.jpg',
+    },
+    content: 'liked your video',
+    time: '6h',
+    postImage: 'https://images.unsplash.com/photo-1545239351-ef35f43d514b',
+    isRead: true,
+  },
+  {
+    id: '6',
+    type: 'message',
+    user: {
+      username: 'user6',
+      image: 'https://randomuser.me/api/portraits/men/22.jpg',
+    },
+    content: 'sent you a message',
+    time: '1d',
+    isRead: true,
+  },
+];
+
+const NotificationsScreen = () => {
+  const [activeTab, setActiveTab] = useState('all');
+  const [notifications, setNotifications] = useState(NOTIFICATIONS);
+
+  const tabs = [
+    { id: 'all', label: 'All' },
+    { id: 'likes', label: 'Likes' },
+    { id: 'comments', label: 'Comments' },
+    { id: 'mentions', label: 'Mentions' },
+    { id: 'follows', label: 'Follows' },
+  ];
+
+  const filteredNotifications = activeTab === 'all' 
+    ? notifications 
+    : notifications.filter(notification => notification.type === activeTab.slice(0, -1));
+
+  const markAsRead = (id) => {
+    setNotifications(
+      notifications.map((notification) =>
+        notification.id === id ? { ...notification, isRead: true } : notification
+      )
+    );
+  };
+
+  const renderNotificationIcon = (type) => {
+    switch (type) {
+      case 'like':
+        return <Icon name="heart" size={16} color="#FF2D55" />;
+      case 'comment':
+        return <Icon name="comment" size={16} color="#4c68d7" />;
+      case 'follow':
+        return <Icon name="user-plus" size={16} color="#4c68d7" />;
+      case 'mention':
+        return <Icon name="at" size={16} color="#8a3ab9" />;
+      case 'message':
+        return <Icon name="envelope" size={16} color="#4c68d7" />;
+      default:
+        return null;
+    }
+  };
+
+  const renderNotification = ({ item }) => (
+    <TouchableOpacity 
+      className={`flex-row items-center p-4 ${
+        !item.isRead ? 'bg-blue-50' : ''
+      }`}
+      onPress={() => markAsRead(item.id)}>
+      <View className="mr-3">
+        <Image
+          source={{ uri: item.user.image }}
+          className="w-12 h-12 rounded-full"
+        />
+        <View className="absolute bottom-0 right-0 bg-white rounded-full p-1">
+          {renderNotificationIcon(item.type)}
+        </View>
+      </View>
+
+      <View className="flex-1">
+        <View className="flex-row items-center">
+          <Text className="font-bold">{item.user.username}</Text>
+          <Text className="ml-1">{item.content}</Text>
+        </View>
+        <Text className="text-gray-500 text-xs mt-1">{item.time}</Text>
+      </View>
+
+      {item.postImage && (
+        <Image
+          source={{ uri: item.postImage }}
+          className="w-12 h-12 rounded-sm"
+        />
+      )}
+
+      {!item.isRead && (
+        <View className="w-2 h-2 rounded-full bg-blue-500 ml-2" />
+      )}
+    </TouchableOpacity>
+  );
+
+  return (
+    <View className="flex-1 bg-white">
+      {/* Header */}
+      <View className="p-4 border-b border-gray-200">
+        <Text className="text-xl font-bold">Notifications</Text>
+      </View>
+
+      {/* Tabs */}
+      <View className="border-b border-gray-200">
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          className="py-2">
+          {tabs.map((tab) => (
+            <TouchableOpacity
+              key={tab.id}
+              className={`px-4 py-2 mx-1 ${
+                activeTab === tab.id 
+                  ? 'border-b-2 border-primary' 
+                  : ''
+              }`}
+              onPress={() => setActiveTab(tab.id)}>
+              <Text className={activeTab === tab.id ? 'font-bold' : ''}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* Notification List */}
+      <FlatList
+        data={filteredNotifications}
+        renderItem={renderNotification}
+        keyExtractor={(item) => item.id}
+        className="flex-1"
+        ItemSeparatorComponent={() => (
+          <View className="h-px bg-gray-200" />
+        )}
+      />
+    </View>
+  );
+};
+
+export default NotificationsScreen;

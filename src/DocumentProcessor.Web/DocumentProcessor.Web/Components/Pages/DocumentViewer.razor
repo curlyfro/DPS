@@ -41,8 +41,8 @@ else
                         {
                             <div class="document-content">
                                 <h5>Extracted Content</h5>
-                                <div class="border p-3 bg-light" style="max-height: 400px; overflow-y: auto;">
-                                    <pre>@document.ExtractedText</pre>
+                                <div class="border p-3 bg-light" style="max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word;">
+                                    <pre style="white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; margin: 0;">@document.ExtractedText</pre>
                                 </div>
                             </div>
                         }
@@ -51,7 +51,7 @@ else
                         {
                             <div class="document-summary mt-4">
                                 <h5>AI Generated Summary</h5>
-                                <div class="alert alert-info">
+                                <div class="alert alert-info" style="white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word;">
                                     @document.Summary
                                 </div>
                             </div>
@@ -178,7 +178,7 @@ else
                             <i class="bi bi-info-circle"></i> View Metadata
                         </button>
 
-                        @if (document.Status == DocumentStatus.Processed || document.Status == DocumentStatus.Completed)
+                        @if (document.Status == DocumentStatus.Processed)
                         {
                             <button class="btn btn-outline-success w-100 mb-2" @onclick="ExportResults">
                                 <i class="bi bi-file-earmark-arrow-down"></i> Export Results
@@ -269,7 +269,7 @@ else
 
     private void ViewMetadata()
     {
-        Navigation.NavigateTo($"/document/{DocumentId}/metadata");
+        Navigation.NavigateTo($"/metadata/{DocumentId}");
     }
 
     private void ExportResults()
@@ -292,9 +292,7 @@ else
             DocumentStatus.Queued => "bg-info",
             DocumentStatus.Processing => "bg-primary",
             DocumentStatus.Processed => "bg-success",
-            DocumentStatus.Completed => "bg-success",
             DocumentStatus.Failed => "bg-danger",
-            DocumentStatus.Archived => "bg-dark",
             _ => "bg-light"
         };
     }

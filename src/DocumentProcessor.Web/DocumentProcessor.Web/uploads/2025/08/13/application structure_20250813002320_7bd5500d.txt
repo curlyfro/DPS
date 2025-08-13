@@ -1,0 +1,31 @@
+app
+-- user
+	-- _layout.jsx
+	-- createEvent.jsx
+	-- eventDetails.jsx
+	-- home.jsx
+	-- index.jsx
+	-- notifications.jsx
+	-- search.jsx
+	-- user.jsx
+-- layout.jsx
+-- _root.jsx
+-- App.jsx
+-- index.jsx
+-- login.jsx
+-- signUp.jsx
+-- verify.jsx
+-- wonderfull.jsx
+components
+-- EventCard.jsx
+-- BackButton.jsx
+-- Button.jsx
+-- EnhancedVideoPlayer.jsx
+constants
+-- Colors.jsx
+-- icons.jsx
+-- theme.jsx
+contexts
+-- AuthContext.jsx
+services
+-- KameeyoEventService.jsx

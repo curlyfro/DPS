@@ -50,6 +50,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
             classification.UpdatedAt = DateTime.UtcNow;
 
             await _dbSet.AddAsync(classification);
+            await _context.SaveChangesAsync(); // Save to database
             return classification;
         }
 
@@ -57,6 +58,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
         {
             classification.UpdatedAt = DateTime.UtcNow;
             _dbSet.Update(classification);
+            await _context.SaveChangesAsync(); // Save to database
             return classification;
         }
 
@@ -66,6 +68,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
             if (classification != null)
             {
                 _dbSet.Remove(classification);
+                await _context.SaveChangesAsync(); // Save to database
             }
         }
 
@@ -99,6 +102,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
                 classification.VerifiedAt = DateTime.UtcNow;
                 classification.UpdatedAt = DateTime.UtcNow;
                 _dbSet.Update(classification);
+                await _context.SaveChangesAsync(); // Save to database
                 return true;
             }
             return false;

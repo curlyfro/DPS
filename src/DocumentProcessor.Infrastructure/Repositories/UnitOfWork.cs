@@ -155,6 +155,9 @@ namespace DocumentProcessor.Infrastructure.Repositories
         Task<ProcessingQueue> UpdateAsync(ProcessingQueue item);
         Task DeleteAsync(Guid id);
         Task<int> GetQueueLengthAsync();
+        Task<bool> StartProcessingAsync(Guid id, string processorId);
+        Task<bool> CompleteProcessingAsync(Guid id, string? resultData = null);
+        Task<bool> FailProcessingAsync(Guid id, string errorMessage, string? errorDetails = null);
     }
 
     public interface IDocumentMetadataRepository
@@ -164,5 +167,14 @@ namespace DocumentProcessor.Infrastructure.Repositories
         Task<DocumentMetadata> AddAsync(DocumentMetadata metadata);
         Task<DocumentMetadata> UpdateAsync(DocumentMetadata metadata);
         Task DeleteAsync(Guid id);
+        Task<IEnumerable<DocumentMetadata>> GetAllAsync();
+        Task<IEnumerable<DocumentMetadata>> SearchByKeywordsAsync(string keywords);
+        Task<IEnumerable<DocumentMetadata>> GetByAuthorAsync(string author);
+        Task<IEnumerable<DocumentMetadata>> GetByLanguageAsync(string language);
+        Task<IEnumerable<DocumentMetadata>> GetByDateRangeAsync(DateTime startDate, DateTime endDate);
+        Task<bool> AddTagAsync(Guid metadataId, string key, string value);
+        Task<bool> RemoveTagAsync(Guid metadataId, string key);
+        Task<Dictionary<string, int>> GetTopAuthorsAsync(int limit = 10);
+        Task<Dictionary<string, int>> GetLanguageDistributionAsync();
     }
 }

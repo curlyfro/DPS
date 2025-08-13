@@ -333,7 +333,7 @@
 
     private void ViewDocument(Guid documentId)
     {
-        Navigation.NavigateTo($"/documents/{documentId}");
+        Navigation.NavigateTo($"/document/{documentId}");
     }
 
     private async Task DeleteDocument(Guid documentId)
@@ -395,7 +395,6 @@
             DocumentStatus.Processing => "bg-info",
             DocumentStatus.Processed => "bg-success",
             DocumentStatus.Failed => "bg-danger",
-            DocumentStatus.Completed => "bg-success",
             _ => "bg-secondary"
         };
     }

@@ -94,6 +94,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
             document.UpdatedAt = DateTime.UtcNow;
             
             await _dbSet.AddAsync(document);
+            await _context.SaveChangesAsync(); // Save to database
             return document;
         }
 
@@ -101,6 +102,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
         {
             document.UpdatedAt = DateTime.UtcNow;
             _dbSet.Update(document);
+            await _context.SaveChangesAsync(); // Save to database
             return document;
         }
 
@@ -110,6 +112,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
             if (document != null)
             {
                 _dbSet.Remove(document);
+                await _context.SaveChangesAsync(); // Save to database
             }
         }
 
@@ -122,6 +125,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
                 document.DeletedAt = DateTime.UtcNow;
                 document.UpdatedAt = DateTime.UtcNow;
                 _dbSet.Update(document);
+                await _context.SaveChangesAsync(); // Save to database
             }
         }
 

@@ -1,10 +1,15 @@
 @page "/background-tasks"
 @using DocumentProcessor.Application.Services
 @using DocumentProcessor.Core.Interfaces
+@using DocumentProcessor.Core.Entities
+@using DocumentProcessor.Infrastructure.Repositories
 @inject IBackgroundDocumentProcessingService BackgroundService
 @inject IBackgroundTaskQueue TaskQueue
+@inject IUnitOfWork UnitOfWork
+@inject IDocumentRepository DocumentRepository
 @inject ILogger<BackgroundTasks> Logger
 @rendermode InteractiveServer
+@implements IDisposable
 
 <PageTitle>Background Tasks</PageTitle>
 
@@ -52,7 +57,7 @@
                 <h5>Recent Tasks</h5>
             </div>
             <div class="card-body">
-                @if (!taskStatuses.Any())
+                @if (!processingQueueItems.Any())
                 {
                     <p class="text-muted">No tasks in the system yet.</p>
                 }
@@ -62,30 +67,79 @@
                         <table class="table table-striped">
                             <thead>
                                 <tr>
-                                    <th>Task ID</th>
+                                    <th>Document</th>
+                                    <th>Type</th>
                                     <th>Status</th>
+                                    <th>Priority</th>
+                                    <th>Retry Count</th>
                                     <th>Created</th>
+                                    <th>Started</th>
+                                    <th>Error</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach (var task in taskStatuses.Take(20))
+                                @foreach (var item in processingQueueItems.Take(20))
                                 {
                                     <tr>
-                                        <td><code>@task.TaskId</code></td>
                                         <td>
-                                            <span class="badge @GetStatusBadgeClass(task.Status)">
-                                                @task.Status
+                                            @if (item.Document != null)
+                                            {
+                                                <a href="/document/@item.Document.Id">
+                                                    @(string.IsNullOrEmpty(item.Document.FileName) ? "Unnamed" : item.Document.FileName)
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                <span>Unknown</span>
+                                            }
+                                        </td>
+                                        <td>@item.ProcessingType</td>
+                                        <td>
+                                            <span class="badge @GetQueueStatusBadgeClass(item.Status)">
+                                                @item.Status
                                             </span>
                                         </td>
-                                        <td>@task.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
                                         <td>
-                                            @if (task.Status == BackgroundTaskStatus.Failed)
+                                            <span class="badge bg-info">@item.Priority</span>
+                                        </td>
+                                        <td>@item.RetryCount / @item.MaxRetries</td>
+                                        <td>@item.CreatedAt.ToString("MM/dd HH:mm:ss")</td>
+                                        <td>
+                                            @if (item.StartedAt.HasValue)
                                             {
-                                                <button class="btn btn-sm btn-warning" 
-                                                        @onclick="() => RetryTask(task.TaskId)">
+                                                @item.StartedAt.Value.ToString("MM/dd HH:mm:ss")
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(item.ErrorMessage))
+                                            {
+                                                <span class="text-danger" title="@item.ErrorMessage">
+                                                    @(item.ErrorMessage.Length > 30 ? item.ErrorMessage.Substring(0, 30) + "..." : item.ErrorMessage)
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (item.Status == ProcessingStatus.Failed && item.RetryCount < item.MaxRetries)
+                                            {
+                                                <button class="btn btn-sm btn-warning"
+                                                        @onclick="() => RetryQueueItem(item.Id)">
                                                     Retry
                                                 </button>
+                                            }
+                                            @if (item.Status == ProcessingStatus.InProgress)
+                                            {
+                                                <span class="spinner-border spinner-border-sm" role="status">
+                                                    <span class="visually-hidden">Processing...</span>
+                                                </span>
                                             }
                                         </td>
                                     </tr>
@@ -115,7 +169,7 @@
     private int processingCount = 0;
     private int completedCount = 0;
     private int failedCount = 0;
-    private List<TaskStatusInfo> taskStatuses = new();
+    private List<ProcessingQueue> processingQueueItems = new();
     private System.Threading.Timer? refreshTimer;
 
     protected override async Task OnInitializedAsync()
@@ -126,21 +180,55 @@
         refreshTimer = new System.Threading.Timer(
             async _ => await InvokeAsync(RefreshStatus),
             null,
-            TimeSpan.FromSeconds(5),
-            TimeSpan.FromSeconds(5));
+            TimeSpan.FromSeconds(3),
+            TimeSpan.FromSeconds(3));
     }
 
     private async Task RefreshStatus()
     {
         try
         {
-            queueLength = await BackgroundService.GetQueueLengthAsync();
+            // Get all processing queue items from database
+            // Get pending items first, then other statuses
+            var pendingItems = await UnitOfWork.ProcessingQueues.GetPendingAsync(1000);
+            var inProgressItems = await UnitOfWork.ProcessingQueues.GetByStatusAsync(ProcessingStatus.InProgress);
+            var completedItems = await UnitOfWork.ProcessingQueues.GetByStatusAsync(ProcessingStatus.Completed);
+            var failedItems = await UnitOfWork.ProcessingQueues.GetByStatusAsync(ProcessingStatus.Failed);
+            var retryingItems = await UnitOfWork.ProcessingQueues.GetByStatusAsync(ProcessingStatus.Retrying);
             
-            // In a real implementation, you would query actual task statuses
-            // This is simplified for demonstration
-            processingCount = taskStatuses.Count(t => t.Status == BackgroundTaskStatus.Processing);
-            completedCount = taskStatuses.Count(t => t.Status == BackgroundTaskStatus.Completed);
-            failedCount = taskStatuses.Count(t => t.Status == BackgroundTaskStatus.Failed);
+            var allQueueItems = pendingItems
+                .Concat(inProgressItems)
+                .Concat(completedItems)
+                .Concat(failedItems)
+                .Concat(retryingItems);
+                
+            processingQueueItems = allQueueItems
+                .OrderByDescending(q => q.Priority)
+                .ThenBy(q => q.CreatedAt)
+                .ToList();
+
+            // Load related documents
+            foreach (var item in processingQueueItems)
+            {
+                if (item.DocumentId != Guid.Empty)
+                {
+                    item.Document = await DocumentRepository.GetByIdAsync(item.DocumentId);
+                }
+            }
+
+            // Calculate counts
+            queueLength = processingQueueItems.Count(q =>
+                q.Status == ProcessingStatus.Pending ||
+                q.Status == ProcessingStatus.Retrying);
+            
+            processingCount = processingQueueItems.Count(q =>
+                q.Status == ProcessingStatus.InProgress);
+            
+            completedCount = processingQueueItems.Count(q =>
+                q.Status == ProcessingStatus.Completed);
+            
+            failedCount = processingQueueItems.Count(q =>
+                q.Status == ProcessingStatus.Failed);
             
             StateHasChanged();
         }
@@ -152,49 +240,86 @@
 
     private async Task SimulateTask()
     {
-        var taskId = Guid.NewGuid().ToString();
-        
-        await TaskQueue.QueueBackgroundWorkItemAsync(
-            async (ct) =>
-            {
-                // Simulate some work
-                await Task.Delay(Random.Shared.Next(1000, 5000), ct);
-                
-                // Randomly fail some tasks for demonstration
-                if (Random.Shared.Next(0, 10) > 7)
-                {
-                    throw new Exception("Simulated failure");
-                }
-            },
-            taskId,
-            Random.Shared.Next(0, 10));
-        
-        taskStatuses.Insert(0, new TaskStatusInfo
+        try
         {
-            TaskId = taskId,
-            Status = BackgroundTaskStatus.Queued,
-            CreatedAt = DateTime.UtcNow
-        });
-        
-        await RefreshStatus();
+            // Create a test document
+            var testDoc = new Document
+            {
+                Id = Guid.NewGuid(),
+                FileName = $"test-doc-{DateTime.Now:yyyyMMddHHmmss}.txt",
+                ContentType = "text/plain",
+                FileSize = 1024,
+                Status = DocumentStatus.Pending,
+                UploadedAt = DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
+                StoragePath = $"test/{Guid.NewGuid()}.txt",
+                OriginalFileName = "test.txt",
+                FileExtension = ".txt"
+            };
+            
+            await DocumentRepository.AddAsync(testDoc);
+            await UnitOfWork.SaveChangesAsync();
+
+            // Queue for processing
+            var queueItem = new ProcessingQueue
+            {
+                Id = Guid.NewGuid(),
+                DocumentId = testDoc.Id,
+                ProcessingType = ProcessingType.Summarization,
+                Priority = Random.Shared.Next(1, 10),
+                Status = ProcessingStatus.Pending,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
+                MaxRetries = 3,
+                RetryCount = 0
+            };
+
+            await UnitOfWork.ProcessingQueues.AddAsync(queueItem);
+            await UnitOfWork.SaveChangesAsync();
+
+            await RefreshStatus();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error simulating task");
+        }
     }
 
-    private async Task RetryTask(string taskId)
+    private async Task RetryQueueItem(Guid queueItemId)
     {
-        // In a real implementation, you would re-queue the failed task
-        Logger.LogInformation("Retrying task {TaskId}", taskId);
-        await SimulateTask();
+        try
+        {
+            var item = await UnitOfWork.ProcessingQueues.GetByIdAsync(queueItemId);
+            if (item != null && item.Status == ProcessingStatus.Failed && item.RetryCount < item.MaxRetries)
+            {
+                item.Status = ProcessingStatus.Retrying;
+                item.NextRetryAt = DateTime.UtcNow.AddSeconds(30);
+                item.UpdatedAt = DateTime.UtcNow;
+                
+                await UnitOfWork.ProcessingQueues.UpdateAsync(item);
+                await UnitOfWork.SaveChangesAsync();
+                
+                await RefreshStatus();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error retrying queue item {QueueItemId}", queueItemId);
+        }
     }
 
-    private string GetStatusBadgeClass(BackgroundTaskStatus status)
+    private string GetQueueStatusBadgeClass(ProcessingStatus status)
     {
         return status switch
         {
-            BackgroundTaskStatus.Queued => "bg-secondary",
-            BackgroundTaskStatus.Processing => "bg-primary",
-            BackgroundTaskStatus.Completed => "bg-success",
-            BackgroundTaskStatus.Failed => "bg-danger",
-            BackgroundTaskStatus.Cancelled => "bg-warning",
+            ProcessingStatus.Pending => "bg-secondary",
+            ProcessingStatus.InProgress => "bg-primary",
+            ProcessingStatus.Completed => "bg-success",
+            ProcessingStatus.Failed => "bg-danger",
+            ProcessingStatus.Retrying => "bg-warning",
+            ProcessingStatus.Cancelled => "bg-dark",
+            ProcessingStatus.Skipped => "bg-info",
             _ => "bg-light"
         };
     }
@@ -202,12 +327,5 @@
     public void Dispose()
     {
         refreshTimer?.Dispose();
-    }
-
-    private class TaskStatusInfo
-    {
-        public string TaskId { get; set; } = string.Empty;
-        public BackgroundTaskStatus Status { get; set; }
-        public DateTime CreatedAt { get; set; }
     }
 }

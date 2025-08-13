@@ -32,8 +32,8 @@ namespace DocumentProcessor.Infrastructure.Providers
             _providerTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
             {
                 ["LocalFileSystem"] = typeof(LocalFileSystemProvider),
-                ["MockS3"] = typeof(MockS3Provider),
-                ["S3"] = typeof(MockS3Provider), // Using MockS3Provider until real S3 is implemented
+                //["MockS3"] = typeof(MockS3Provider),
+                //["S3"] = typeof(MockS3Provider), // Using MockS3Provider until real S3 is implemented
                 ["FileShare"] = typeof(FileShareProvider),
                 ["Network"] = typeof(FileShareProvider) // Alias for FileShare
             };

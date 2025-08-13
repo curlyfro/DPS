@@ -9,7 +9,6 @@ namespace DocumentProcessor.Core.Interfaces
 
     public enum AIProviderType
     {
-        Mock,
         AmazonBedrock,
         OpenAI,
         AzureOpenAI,

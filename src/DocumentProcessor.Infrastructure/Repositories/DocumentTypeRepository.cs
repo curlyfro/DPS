@@ -54,6 +54,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
             documentType.UpdatedAt = DateTime.UtcNow;
 
             await _dbSet.AddAsync(documentType);
+            await _context.SaveChangesAsync(); // Save to database
             return documentType;
         }
 
@@ -61,6 +62,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
         {
             documentType.UpdatedAt = DateTime.UtcNow;
             _dbSet.Update(documentType);
+            await _context.SaveChangesAsync(); // Save to database
             return documentType;
         }
 
@@ -70,6 +72,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
             if (documentType != null)
             {
                 _dbSet.Remove(documentType);
+                await _context.SaveChangesAsync(); // Save to database
             }
         }
 

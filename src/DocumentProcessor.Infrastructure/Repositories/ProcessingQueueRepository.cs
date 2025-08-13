@@ -65,6 +65,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
             item.UpdatedAt = DateTime.UtcNow;
 
             await _dbSet.AddAsync(item);
+            await _context.SaveChangesAsync(); // Save to database
             return item;
         }
 
@@ -72,6 +73,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
         {
             item.UpdatedAt = DateTime.UtcNow;
             _dbSet.Update(item);
+            await _context.SaveChangesAsync(); // Save to database
             return item;
         }
 
@@ -81,6 +83,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
             if (item != null)
             {
                 _dbSet.Remove(item);
+                await _context.SaveChangesAsync(); // Save to database
             }
         }
 
@@ -102,6 +105,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
                 item.ProcessorId = processorId;
                 item.UpdatedAt = DateTime.UtcNow;
                 _dbSet.Update(item);
+                await _context.SaveChangesAsync(); // Save to database
                 return true;
             }
             return false;
@@ -117,6 +121,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
                 item.ResultData = resultData;
                 item.UpdatedAt = DateTime.UtcNow;
                 _dbSet.Update(item);
+                await _context.SaveChangesAsync(); // Save to database
                 return true;
             }
             return false;
@@ -146,6 +151,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
                 item.ErrorDetails = errorDetails;
                 item.UpdatedAt = DateTime.UtcNow;
                 _dbSet.Update(item);
+                await _context.SaveChangesAsync(); // Save to database
                 return true;
             }
             return false;

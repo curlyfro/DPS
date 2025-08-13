@@ -11,6 +11,9 @@ namespace DocumentProcessor.Application
             services.AddScoped<IDocumentProcessingService, DocumentProcessingService>();
             services.AddScoped<IBackgroundDocumentProcessingService, BackgroundDocumentProcessingService>();
             
+            // Note: Background task queue and hosted services are registered in InfrastructureServiceCollectionExtensions
+            // to avoid duplicate registrations
+            
             return services;
         }
     }

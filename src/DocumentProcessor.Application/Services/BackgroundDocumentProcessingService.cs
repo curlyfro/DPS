@@ -94,7 +94,7 @@ namespace DocumentProcessor.Application.Services
                     _logger.LogInformation("Successfully processed document {DocumentId}", documentId);
                     
                     // Update document status
-                    document.Status = DocumentStatus.Completed;
+                    document.Status = DocumentStatus.Processed;
                     document.ProcessedAt = DateTime.UtcNow;
                     await documentRepository.UpdateAsync(document);
                 }

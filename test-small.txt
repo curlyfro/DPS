@@ -1,0 +1,4 @@
+﻿System Information Report
+Date: 08/13/2025
+Computer: TEST-PC
+OS: Windows 11

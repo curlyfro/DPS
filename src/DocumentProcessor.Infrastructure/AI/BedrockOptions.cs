@@ -71,9 +71,9 @@ namespace DocumentProcessor.Infrastructure.AI
         public string? AwsProfile { get; set; }
 
         /// <summary>
-        /// Use mock responses instead of actual Bedrock calls
-        /// Useful for development and testing
+        /// Use simulated responses instead of actual Bedrock API calls (for testing/demo)
+        /// Generates realistic varied responses based on document properties
         /// </summary>
-        public bool UseMockResponses { get; set; } = false;
+        public bool UseSimulatedResponses { get; set; } = false;
     }
 }

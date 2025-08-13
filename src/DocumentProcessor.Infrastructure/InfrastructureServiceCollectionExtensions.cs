@@ -29,8 +29,13 @@ namespace DocumentProcessor.Infrastructure
             services.AddScoped<IClassificationRepository, ClassificationRepository>();
             services.AddScoped<IProcessingQueueRepository, ProcessingQueueRepository>();
             services.AddScoped<IDocumentMetadataRepository, DocumentMetadataRepository>();
+            
+            // Register Unit of Work
+            services.AddScoped<IUnitOfWork, UnitOfWork>();
 
             // Register document source providers
+            services.AddSingleton<LocalFileSystemProvider>();
+            services.AddSingleton<FileShareProvider>();
             services.AddSingleton<IDocumentSourceFactory, DocumentSourceFactory>();
             services.AddScoped<IDocumentSourceProvider>(provider =>
             {
@@ -41,7 +46,10 @@ namespace DocumentProcessor.Infrastructure
 
             // Register AI processing services
             services.AddSingleton<IAIProcessorFactory, AIProcessorFactory>();
-            services.AddSingleton<IAIProcessingQueue, InMemoryProcessingQueue>();
+            services.AddSingleton<DocumentContentExtractor>();
+
+            // Use database-backed queue instead of in-memory queue
+            services.AddSingleton<IAIProcessingQueue, DatabaseProcessingQueue>();
             
             // Register Bedrock configuration
             var bedrockSection = configuration.GetSection("Bedrock");
@@ -49,7 +57,7 @@ namespace DocumentProcessor.Infrastructure
             {
                 bedrockSection.Bind(options);
             });
-            services.AddSingleton<MockAIProcessor>();
+            //services.AddSingleton<IAIProcessor>();
             
             // Register background task services
             var usePriorityQueue = configuration.GetValue<bool>("BackgroundTasks:UsePriorityQueue", true);
@@ -64,11 +72,27 @@ namespace DocumentProcessor.Infrastructure
             
             // Register hosted services
             var maxConcurrency = configuration.GetValue<int>("BackgroundTasks:MaxConcurrency", 3);
-            services.AddHostedService<DocumentProcessingHostedService>(provider =>
-                new DocumentProcessingHostedService(
-                    provider.GetRequiredService<IBackgroundTaskQueue>(),
-                    provider.GetRequiredService<ILogger<DocumentProcessingHostedService>>(),
-                    maxConcurrency));
+            
+            // Register the base QueuedHostedService
+            services.AddHostedService(provider =>
+            {
+                var logger = provider.GetRequiredService<ILogger<QueuedHostedService>>();
+                var queue = provider.GetRequiredService<IBackgroundTaskQueue>();
+                logger.LogInformation("Creating QueuedHostedService");
+                return new QueuedHostedService(queue, logger);
+            });
+            
+            // Register the DocumentProcessingHostedService
+            services.AddHostedService(provider =>
+            {
+                var logger = provider.GetRequiredService<ILogger<DocumentProcessingHostedService>>();
+                var queue = provider.GetRequiredService<IBackgroundTaskQueue>();
+                logger.LogInformation($"Creating DocumentProcessingHostedService with max concurrency: {maxConcurrency}");
+                return new DocumentProcessingHostedService(queue, logger, maxConcurrency);
+            });
+            
+            // Register the AI Queue Processing Service for database-backed queue
+            services.AddHostedService<AIQueueProcessingService>();
             
             // Note: IDocumentProcessingService is registered in the Application layer
 

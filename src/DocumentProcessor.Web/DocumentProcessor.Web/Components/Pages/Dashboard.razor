@@ -1,12 +1,18 @@
+@page "/"
 @page "/dashboard"
 @using DocumentProcessor.Core.Entities
 @using DocumentProcessor.Core.Interfaces
+@using DocumentProcessor.Infrastructure.Repositories
 @using DocumentProcessor.Application.Services
 @using Microsoft.AspNetCore.Components.Web.Virtualization
+@using Microsoft.JSInterop
 @inject IDocumentRepository DocumentRepository
+@inject IUnitOfWork UnitOfWork
 @inject IBackgroundDocumentProcessingService BackgroundService
 @inject IDocumentProcessingService ProcessingService
 @inject ILogger<Dashboard> Logger
+@inject IJSRuntime JSRuntime
+@inject IConfiguration Configuration
 @rendermode InteractiveServer
 @implements IDisposable
 
@@ -117,9 +123,9 @@
                                 {
                                     <tr>
                                         <td>
-                                            <a href="/document/@doc.Id">@doc.OriginalFileName</a>
+                                            <a href="/document/@doc.Id">@(string.IsNullOrEmpty(doc.FileName) ? "Unnamed Document" : doc.FileName)</a>
                                         </td>
-                                        <td>@doc.FileExtension</td>
+                                        <td>@(string.IsNullOrEmpty(doc.ContentType) ? "Unknown" : doc.ContentType)</td>
                                         <td>@FormatFileSize(doc.FileSize)</td>
                                         <td>
                                             <span class="badge @GetStatusBadgeClass(doc.Status)">
@@ -248,11 +254,14 @@
     private List<QueueItemInfo> processingQueue = new();
     private int queueLength = 0;
     private string storageProvider = "LocalFileSystem";
-    private string aiProvider = "Mock";
+    private string aiProvider = "Amazon Bedrock";
     private long storageUsed = 0;
     private long storageTotal = 10737418240; // 10GB
     private int storageUsagePercent => (int)((storageUsed / (double)storageTotal) * 100);
     private System.Threading.Timer? refreshTimer;
+    private Dictionary<string, int> processingActivityData = new();
+    private Dictionary<string, int> documentTypeData = new();
+    private bool chartsInitialized = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -266,6 +275,15 @@
             TimeSpan.FromSeconds(10));
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender || (!chartsInitialized && processingActivityData.Any()))
+        {
+            await InitializeCharts();
+            chartsInitialized = true;
+        }
+    }
+
     private async Task LoadDashboardData()
     {
         try
@@ -273,9 +291,9 @@
             // Load statistics
             var allDocuments = await DocumentRepository.GetAllAsync();
             stats.TotalDocuments = allDocuments.Count();
-            stats.ProcessedDocuments = allDocuments.Count(d => 
-                d.Status == DocumentStatus.Processed || d.Status == DocumentStatus.Completed);
-            stats.QueuedDocuments = allDocuments.Count(d => 
+            stats.ProcessedDocuments = allDocuments.Count(d =>
+                d.Status == DocumentStatus.Processed);
+            stats.QueuedDocuments = allDocuments.Count(d =>
                 d.Status == DocumentStatus.Queued || d.Status == DocumentStatus.Processing);
             stats.FailedDocuments = allDocuments.Count(d => d.Status == DocumentStatus.Failed);
 
@@ -291,22 +309,162 @@
             // Load queue status
             queueLength = await BackgroundService.GetQueueLengthAsync();
             
-            // Simulate processing queue items
+            // Load processing queue items
             var queuedDocs = allDocuments
                 .Where(d => d.Status == DocumentStatus.Queued || d.Status == DocumentStatus.Processing)
                 .Take(5)
-                .Select(d => new QueueItemInfo 
-                { 
-                    DocumentName = d.OriginalFileName,
+                .Select(d => new QueueItemInfo
+                {
+                    DocumentName = string.IsNullOrEmpty(d.FileName) ? "Unnamed Document" : d.FileName,
                     Priority = ProcessingPriority.Normal
                 })
                 .ToList();
             processingQueue = queuedDocs;
+
+            // Prepare processing activity data (last 7 days)
+            processingActivityData.Clear();
+            var last7Days = DateTime.UtcNow.AddDays(-7);
+            var processedLast7Days = allDocuments
+                .Where(d => d.ProcessedAt.HasValue && d.ProcessedAt.Value >= last7Days)
+                .GroupBy(d => d.ProcessedAt.Value.Date)
+                .ToDictionary(g => g.Key.ToString("MM/dd"), g => g.Count());
+
+            // Fill in missing days with 0
+            for (int i = 6; i >= 0; i--)
+            {
+                var date = DateTime.UtcNow.AddDays(-i).ToString("MM/dd");
+                if (!processedLast7Days.ContainsKey(date))
+                {
+                    processingActivityData[date] = 0;
+                }
+                else
+                {
+                    processingActivityData[date] = processedLast7Days[date];
+                }
+            }
+
+            // Prepare document type data
+            documentTypeData.Clear();
+            var documentTypes = await UnitOfWork.DocumentTypes.GetAllAsync();
+            foreach (var type in documentTypes)
+            {
+                var count = allDocuments.Count(d => d.DocumentTypeId == type.Id);
+                if (count > 0)
+                {
+                    documentTypeData[type.Name] = count;
+                }
+            }
+
+            // Add uncategorized documents
+            var uncategorizedCount = allDocuments.Count(d => d.DocumentTypeId == null);
+            if (uncategorizedCount > 0)
+            {
+                documentTypeData["Uncategorized"] = uncategorizedCount;
+            }
+
+            // Update storage provider from configuration
+            var useS3 = Configuration.GetValue<bool>("DocumentStorage:UseS3");
+            storageProvider = useS3 ? "Amazon S3" : "Local FileSystem";
+
+            // Update AI provider from configuration
+            var useSimulated = Configuration.GetValue<bool>("BedrockOptions:UseSimulatedResponses");
+            aiProvider = useSimulated ? "Simulated" : "Amazon Bedrock";
+
+            // Update charts if already initialized
+            if (chartsInitialized)
+            {
+                await UpdateCharts();
+            }
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Error loading dashboard data");
         }
+    }
+
+    private async Task InitializeCharts()
+    {
+        try
+        {
+            // Initialize processing activity chart
+            var activityLabels = processingActivityData.Keys.ToArray();
+            var activityValues = processingActivityData.Values.ToArray();
+            
+            await JSRuntime.InvokeVoidAsync("initializeChart",
+                "activityChart",
+                "line",
+                activityLabels,
+                "Documents Processed",
+                activityValues,
+                "#36a2eb");
+
+            // Initialize document type chart
+            if (documentTypeData.Any())
+            {
+                var typeLabels = documentTypeData.Keys.ToArray();
+                var typeValues = documentTypeData.Values.ToArray();
+                var colors = GenerateColors(typeLabels.Length);
+                
+                await JSRuntime.InvokeVoidAsync("initializeChart",
+                    "typeChart",
+                    "doughnut",
+                    typeLabels,
+                    "Document Count",
+                    typeValues,
+                    colors);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error initializing charts");
+        }
+    }
+
+    private async Task UpdateCharts()
+    {
+        try
+        {
+            // Update processing activity chart
+            var activityLabels = processingActivityData.Keys.ToArray();
+            var activityValues = processingActivityData.Values.ToArray();
+            
+            await JSRuntime.InvokeVoidAsync("updateChart",
+                "activityChart",
+                activityLabels,
+                activityValues);
+
+            // Update document type chart
+            if (documentTypeData.Any())
+            {
+                var typeLabels = documentTypeData.Keys.ToArray();
+                var typeValues = documentTypeData.Values.ToArray();
+                
+                await JSRuntime.InvokeVoidAsync("updateChart",
+                    "typeChart",
+                    typeLabels,
+                    typeValues);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error updating charts");
+        }
+    }
+
+    private string[] GenerateColors(int count)
+    {
+        var colors = new[]
+        {
+            "#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF",
+            "#FF9F40", "#FF6384", "#C9CBCF", "#4BC0C0", "#FF6384"
+        };
+        
+        var result = new string[count];
+        for (int i = 0; i < count; i++)
+        {
+            result[i] = colors[i % colors.Length];
+        }
+        return result;
     }
 
     private async Task RefreshData()
@@ -336,9 +494,7 @@
             DocumentStatus.Queued => "bg-info",
             DocumentStatus.Processing => "bg-primary",
             DocumentStatus.Processed => "bg-success",
-            DocumentStatus.Completed => "bg-success",
             DocumentStatus.Failed => "bg-danger",
-            DocumentStatus.Archived => "bg-dark",
             _ => "bg-light"
         };
     }
@@ -372,6 +528,8 @@
     public void Dispose()
     {
         refreshTimer?.Dispose();
+        _ = JSRuntime.InvokeVoidAsync("destroyChart", "activityChart");
+        _ = JSRuntime.InvokeVoidAsync("destroyChart", "typeChart");
     }
 
     private class DashboardStats

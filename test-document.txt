@@ -1,0 +1,15 @@
+This is a test document for the Document Processing Application.
+
+Testing Date: August 12, 2025
+Purpose: Verify document upload and processing functionality
+
+Test Content:
+- Document should upload successfully
+- Document should be saved to database with correct timestamp
+- Document should appear in the documents list
+- Background processing should pick up the document
+- Dashboard should show updated statistics
+- Metadata page should allow editing
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
+Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.

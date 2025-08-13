@@ -37,6 +37,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
             metadata.UpdatedAt = DateTime.UtcNow;
 
             await _dbSet.AddAsync(metadata);
+            await _context.SaveChangesAsync(); // Save to database
             return metadata;
         }
 
@@ -44,6 +45,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
         {
             metadata.UpdatedAt = DateTime.UtcNow;
             _dbSet.Update(metadata);
+            await _context.SaveChangesAsync(); // Save to database
             return metadata;
         }
 
@@ -53,7 +55,16 @@ namespace DocumentProcessor.Infrastructure.Repositories
             if (metadata != null)
             {
                 _dbSet.Remove(metadata);
+                await _context.SaveChangesAsync(); // Save to database
             }
+        }
+
+        public async Task<IEnumerable<DocumentMetadata>> GetAllAsync()
+        {
+            return await _dbSet
+                .Include(m => m.Document)
+                .OrderByDescending(m => m.CreatedAt)
+                .ToListAsync();
         }
 
         public async Task<IEnumerable<DocumentMetadata>> SearchByKeywordsAsync(string keywords)
@@ -117,6 +128,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
                 metadata.Tags[key] = value;
                 metadata.UpdatedAt = DateTime.UtcNow;
                 _dbSet.Update(metadata);
+                await _context.SaveChangesAsync(); // Save to database
                 return true;
             }
             return false;
@@ -130,6 +142,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
                 metadata.Tags.Remove(key);
                 metadata.UpdatedAt = DateTime.UtcNow;
                 _dbSet.Update(metadata);
+                await _context.SaveChangesAsync(); // Save to database
                 return true;
             }
             return false;
