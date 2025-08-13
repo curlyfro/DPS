@@ -2,6 +2,8 @@
 
 A modern, enterprise-grade document processing platform built with .NET 8 and Blazor that leverages AWS Bedrock AI for intelligent document analysis, classification, and metadata extraction.
 
+![Dashboard Overview](screenshots/Screenshot%202025-08-13%20113417.png)
+
 ## 🌟 Key Features
 
 - **🤖 AI-Powered Processing**: Integrates with AWS Bedrock (Claude 3 models) for intelligent document analysis
@@ -94,6 +96,8 @@ DocumentProcessor/
 - **Document Viewer**: Preview documents directly in the browser
 - **Search & Filter**: Find documents by metadata, type, or content
 
+![Document Upload Interface](screenshots/Screenshot%202025-08-13%20113424.png)
+
 ### AI Processing Capabilities
 - **Intelligent Classification**: Automatically categorize documents into predefined types
 - **Content Extraction**: Extract text from various document formats including PDFs
@@ -111,12 +115,18 @@ DocumentProcessor/
 - **System Health**: Monitor database, storage, and AI processor status
 - **Storage Usage**: Track storage consumption with visual indicators
 
+![Document List View](screenshots/Screenshot%202025-08-13%20113444.png)
+
 ### Background Processing
 - **Async Queue Processing**: Non-blocking document processing
 - **Priority Management**: Process documents based on priority levels
 - **Retry Logic**: Automatic retry with exponential backoff
 - **Status Tracking**: Real-time status updates via SignalR
 - **Auto-refresh**: Dashboard updates every 10 seconds
+
+![Document Search Interface](screenshots/Screenshot%202025-08-13%20113453.png)
+
+![Document Metadata View](screenshots/Screenshot%202025-08-13%20113508.png)
 
 ## 🛠️ Technology Stack
 
@@ -361,6 +371,28 @@ For issues, questions, or suggestions:
 - [ ] Machine learning model training on classified documents
 - [ ] Advanced analytics and reporting
 - [ ] Plugin architecture for custom processors
+
+## 📸 Screenshots
+
+### Dashboard Overview
+![Dashboard showing real-time processing statistics and system health](screenshots/Screenshot%202025-08-13%20113417.png)
+*Real-time dashboard with processing statistics, activity charts, and system health monitoring*
+
+### Document Upload
+![Document upload interface with drag-and-drop support](screenshots/Screenshot%202025-08-13%20113424.png)
+*Intuitive drag-and-drop interface for uploading documents with progress tracking*
+
+### Document Management
+![Document list view with filtering and actions](screenshots/Screenshot%202025-08-13%20113444.png)
+*Comprehensive document list with status indicators and quick actions*
+
+### Search Functionality
+![Advanced document search interface](screenshots/Screenshot%202025-08-13%20113453.png)
+*Powerful search capabilities to find documents by various criteria*
+
+### Metadata Extraction
+![AI-powered metadata extraction results](screenshots/Screenshot%202025-08-13%20113508.png)
+*View and edit extracted metadata from processed documents*
 
 ## 📚 Documentation
 
