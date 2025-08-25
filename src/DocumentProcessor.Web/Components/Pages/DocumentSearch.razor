@@ -2,9 +2,11 @@
 @using DocumentProcessor.Core.Entities
 @using DocumentProcessor.Core.Interfaces
 @using Microsoft.EntityFrameworkCore
+@using System.Threading
 @inject IDocumentRepository DocumentRepository
 @inject NavigationManager Navigation
 @rendermode InteractiveServer
+@implements IDisposable
 
 <PageTitle>Document Search</PageTitle>
 
@@ -216,10 +218,21 @@
     private int currentPage = 1;
     private int pageSize = 20;
     private int totalPages = 1;
+    private Timer? refreshTimer;
 
     protected override async Task OnInitializedAsync()
     {
         await PerformSearch();
+        
+        // Set up auto-refresh every 10 seconds
+        refreshTimer = new Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await PerformSearch();
+                StateHasChanged();
+            });
+        }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
     }
 
     private async Task PerformSearch()
@@ -397,5 +410,10 @@
             DocumentStatus.Failed => "bg-danger",
             _ => "bg-secondary"
         };
+    }
+    
+    public void Dispose()
+    {
+        refreshTimer?.Dispose();
     }
 }

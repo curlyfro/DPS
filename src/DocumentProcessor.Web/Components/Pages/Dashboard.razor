@@ -262,17 +262,36 @@
     private Dictionary<string, int> processingActivityData = new();
     private Dictionary<string, int> documentTypeData = new();
     private bool chartsInitialized = false;
+    private bool isRefreshing = false;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadDashboardData();
         
-        // Set up auto-refresh
+        // Set up auto-refresh with proper async handling
         refreshTimer = new System.Threading.Timer(
-            async _ => await InvokeAsync(RefreshData),
+            _ => _ = RefreshTimerCallback(),
             null,
             TimeSpan.FromSeconds(10),
             TimeSpan.FromSeconds(10));
+    }
+
+    private async Task RefreshTimerCallback()
+    {
+        if (isRefreshing)
+            return;
+            
+        try
+        {
+            await InvokeAsync(async () =>
+            {
+                await RefreshData();
+            });
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error in dashboard refresh timer");
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -469,8 +488,19 @@
 
     private async Task RefreshData()
     {
-        await LoadDashboardData();
-        StateHasChanged();
+        if (isRefreshing)
+            return;
+            
+        isRefreshing = true;
+        try
+        {
+            await LoadDashboardData();
+            StateHasChanged();
+        }
+        finally
+        {
+            isRefreshing = false;
+        }
     }
 
     private async Task ProcessDocument(Guid documentId)

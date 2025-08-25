@@ -5,149 +5,44 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace DocumentProcessor.Infrastructure.BackgroundTasks
+namespace DocumentProcessor.Infrastructure.BackgroundTasks;
+
+public class QueuedHostedService(
+    IBackgroundTaskQueue taskQueue,
+    ILogger<QueuedHostedService> logger)
+    : BackgroundService
 {
-    public class QueuedHostedService : BackgroundService
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        private readonly IBackgroundTaskQueue _taskQueue;
-        private readonly ILogger<QueuedHostedService> _logger;
+        logger.LogInformation("Queued Hosted Service is starting.");
 
-        public QueuedHostedService(
-            IBackgroundTaskQueue taskQueue,
-            ILogger<QueuedHostedService> logger)
+        while (!stoppingToken.IsCancellationRequested)
         {
-            _taskQueue = taskQueue;
-            _logger = logger;
-        }
+            var workItem = await taskQueue.DequeueAsync(stoppingToken);
 
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-        {
-            _logger.LogInformation("Queued Hosted Service is starting.");
-
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                var workItem = await _taskQueue.DequeueAsync(stoppingToken);
-
-                if (workItem != null)
-                {
-                    try
-                    {
-                        await workItem(stoppingToken);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        // Prevent throwing if stoppingToken was signaled
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Error occurred executing background work item.");
-                    }
-                }
-            }
-
-            _logger.LogInformation("Queued Hosted Service is stopping.");
-        }
-
-        public override async Task StopAsync(CancellationToken cancellationToken)
-        {
-            _logger.LogInformation("Queued Hosted Service is stopping.");
-            await base.StopAsync(cancellationToken);
-        }
-    }
-
-    public class DocumentProcessingHostedService : BackgroundService
-    {
-        private readonly IBackgroundTaskQueue _taskQueue;
-        private readonly ILogger<DocumentProcessingHostedService> _logger;
-        private readonly int _maxConcurrency;
-        private readonly SemaphoreSlim _semaphore;
-
-        public DocumentProcessingHostedService(
-            IBackgroundTaskQueue taskQueue,
-            ILogger<DocumentProcessingHostedService> logger,
-            int maxConcurrency = 3)
-        {
-            _taskQueue = taskQueue;
-            _logger = logger;
-            _maxConcurrency = maxConcurrency;
-            _semaphore = new SemaphoreSlim(maxConcurrency, maxConcurrency);
-        }
-
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-        {
-            _logger.LogInformation("Document Processing Hosted Service is starting with max concurrency: {MaxConcurrency}", 
-                _maxConcurrency);
-
-            var tasks = new Task[_maxConcurrency];
-            
-            for (int i = 0; i < _maxConcurrency; i++)
-            {
-                tasks[i] = ProcessTasksAsync(i, stoppingToken);
-            }
-
-            await Task.WhenAll(tasks);
-
-            _logger.LogInformation("Document Processing Hosted Service is stopping.");
-        }
-
-        private async Task ProcessTasksAsync(int workerId, CancellationToken stoppingToken)
-        {
-            _logger.LogInformation("Worker {WorkerId} started", workerId);
-
-            while (!stoppingToken.IsCancellationRequested)
+            if (workItem != null)
             {
                 try
                 {
-                    await _semaphore.WaitAsync(stoppingToken);
-                    
-                    try
-                    {
-                        var workItem = await _taskQueue.DequeueAsync(stoppingToken);
-
-                        if (workItem != null)
-                        {
-                            _logger.LogInformation("Worker {WorkerId} processing task", workerId);
-                            
-                            try
-                            {
-                                await workItem(stoppingToken);
-                                _logger.LogInformation("Worker {WorkerId} completed task", workerId);
-                            }
-                            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-                            {
-                                // Expected when cancellation is requested
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger.LogError(ex, "Worker {WorkerId} encountered error processing task", 
-                                    workerId);
-                            }
-                        }
-                    }
-                    finally
-                    {
-                        _semaphore.Release();
-                    }
+                    await workItem(stoppingToken);
                 }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                catch (OperationCanceledException)
                 {
-                    // Expected when cancellation is requested
-                    break;
+                    // Prevent throwing if stoppingToken was signaled
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Worker {WorkerId} encountered unexpected error", workerId);
-                    await Task.Delay(1000, stoppingToken); // Brief delay before retry
+                    logger.LogError(ex, "Error occurred executing background work item.");
                 }
             }
-
-            _logger.LogInformation("Worker {WorkerId} stopped", workerId);
         }
 
-        public override async Task StopAsync(CancellationToken cancellationToken)
-        {
-            _logger.LogInformation("Document Processing Hosted Service is stopping.");
-            await base.StopAsync(cancellationToken);
-        }
+        logger.LogInformation("Queued Hosted Service is stopping.");
+    }
+
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Queued Hosted Service is stopping.");
+        await base.StopAsync(cancellationToken);
     }
 }

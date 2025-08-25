@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using DocumentProcessor.Core.Entities;
 using DocumentProcessor.Infrastructure.Data;
+using System.Text.Json;
 
 namespace DocumentProcessor.Infrastructure.Repositories
 {
@@ -44,7 +45,18 @@ namespace DocumentProcessor.Infrastructure.Repositories
         public async Task<DocumentMetadata> UpdateAsync(DocumentMetadata metadata)
         {
             metadata.UpdatedAt = DateTime.UtcNow;
-            _dbSet.Update(metadata);
+            
+            // For owned entities stored as JSON, we need to force EF to detect changes
+            // by detaching and re-attaching the entity
+            var entry = _context.Entry(metadata);
+            if (entry.State == EntityState.Detached)
+            {
+                _context.Attach(metadata);
+            }
+            
+            // Mark the entire entity as modified
+            entry.State = EntityState.Modified;
+            
             await _context.SaveChangesAsync(); // Save to database
             return metadata;
         }
@@ -122,28 +134,54 @@ namespace DocumentProcessor.Infrastructure.Repositories
 
         public async Task<bool> AddTagAsync(Guid metadataId, string key, string value)
         {
-            var metadata = await _dbSet.FindAsync(metadataId);
+            // Use tracking query to ensure EF Core tracks the entity
+            var metadata = await _dbSet
+                .Where(m => m.Id == metadataId)
+                .FirstOrDefaultAsync();
+                
             if (metadata != null)
             {
-                metadata.Tags[key] = value;
+                // Ensure Tags is initialized
+                if (metadata.Tags == null)
+                {
+                    metadata.Tags = new Dictionary<string, string>();
+                }
+                
+                // Create a new dictionary to force change detection
+                var newTags = new Dictionary<string, string>(metadata.Tags);
+                newTags[key] = value;
+                metadata.Tags = newTags;
                 metadata.UpdatedAt = DateTime.UtcNow;
-                _dbSet.Update(metadata);
-                await _context.SaveChangesAsync(); // Save to database
-                return true;
+                
+                // Force EF Core to detect the change
+                _context.Update(metadata);
+                
+                var savedCount = await _context.SaveChangesAsync();
+                return savedCount > 0;
             }
             return false;
         }
 
         public async Task<bool> RemoveTagAsync(Guid metadataId, string key)
         {
-            var metadata = await _dbSet.FindAsync(metadataId);
-            if (metadata != null && metadata.Tags.ContainsKey(key))
+            // Use tracking query to ensure EF Core tracks the entity
+            var metadata = await _dbSet
+                .Where(m => m.Id == metadataId)
+                .FirstOrDefaultAsync();
+                
+            if (metadata != null && metadata.Tags != null && metadata.Tags.ContainsKey(key))
             {
-                metadata.Tags.Remove(key);
+                // Create a new dictionary to force change detection
+                var newTags = new Dictionary<string, string>(metadata.Tags);
+                newTags.Remove(key);
+                metadata.Tags = newTags;
                 metadata.UpdatedAt = DateTime.UtcNow;
-                _dbSet.Update(metadata);
-                await _context.SaveChangesAsync(); // Save to database
-                return true;
+                
+                // Force EF Core to detect the change
+                _context.Update(metadata);
+                
+                var savedCount = await _context.SaveChangesAsync();
+                return savedCount > 0;
             }
             return false;
         }

@@ -364,10 +364,13 @@
                         Id = Guid.NewGuid(),
                         DocumentId = DocumentId.Value,
                         Title = _document.FileName,
-                        Tags = new Dictionary<string, string>(),
+                        Tags = new Dictionary<string, string>(), // Initialize empty tags dictionary
                         CreatedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow
                     };
+                    
+                    // Save the new metadata immediately so it exists in the database
+                    await MetadataRepository.AddAsync(_metadata);
                 }
             }
             else
@@ -430,12 +433,23 @@
         {
             try
             {
-                if (_metadata.Id == Guid.Empty)
+                // Ensure Tags is initialized
+                if (_metadata.Tags == null)
                 {
+                    _metadata.Tags = new Dictionary<string, string>();
+                }
+                
+                // Check if metadata exists in database
+                var existing = await MetadataRepository.GetByDocumentIdAsync(_metadata.DocumentId);
+                
+                if (existing == null)
+                {
+                    // Create new metadata
                     await MetadataRepository.AddAsync(_metadata);
                 }
                 else
                 {
+                    // Update existing metadata
                     await MetadataRepository.UpdateAsync(_metadata);
                 }
                 
@@ -449,7 +463,7 @@
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, "Error saving metadata");
+                Logger.LogError(ex, "Error saving metadata: {Message}", ex.Message);
             }
         }
     }
@@ -470,9 +484,23 @@
     {
         if (!string.IsNullOrWhiteSpace(_newTagKey) && !string.IsNullOrWhiteSpace(_newTagValue) && _metadata != null)
         {
-            await MetadataRepository.AddTagAsync(_metadata.Id, _newTagKey, _newTagValue);
+            // Ensure Tags dictionary is initialized
+            if (_metadata.Tags == null)
+            {
+                _metadata.Tags = new Dictionary<string, string>();
+            }
+            
+            // Add tag to metadata
             _metadata.Tags[_newTagKey] = _newTagValue;
+            
+            // Save to database
+            await MetadataRepository.AddTagAsync(_metadata.Id, _newTagKey, _newTagValue);
+            
+            // Reload metadata to ensure we have the latest data
+            await LoadData();
+            
             HideAddTagModal();
+            StateHasChanged();
         }
     }
 
@@ -480,8 +508,16 @@
     {
         if (_metadata != null)
         {
+            // Remove tag from metadata
+            _metadata.Tags?.Remove(key);
+            
+            // Save to database
             await MetadataRepository.RemoveTagAsync(_metadata.Id, key);
-            _metadata.Tags.Remove(key);
+            
+            // Reload metadata to ensure we have the latest data
+            await LoadData();
+            
+            StateHasChanged();
         }
     }
 

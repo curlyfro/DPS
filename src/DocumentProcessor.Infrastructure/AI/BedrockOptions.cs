@@ -69,11 +69,5 @@ namespace DocumentProcessor.Infrastructure.AI
         /// Use AWS profile for credentials (for development)
         /// </summary>
         public string? AwsProfile { get; set; }
-
-        /// <summary>
-        /// Use simulated responses instead of actual Bedrock API calls (for testing/demo)
-        /// Generates realistic varied responses based on document properties
-        /// </summary>
-        public bool UseSimulatedResponses { get; set; } = false;
     }
 }

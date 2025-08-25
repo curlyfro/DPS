@@ -11,131 +11,140 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace DocumentProcessor.Infrastructure
+namespace DocumentProcessor.Infrastructure;
+
+public static class InfrastructureServiceCollectionExtensions
 {
-    public static class InfrastructureServiceCollectionExtensions
+    public static IServiceCollection AddInfrastructureServices(
+        this IServiceCollection services,
+        IConfiguration configuration)
     {
-        public static IServiceCollection AddInfrastructureServices(
-            this IServiceCollection services,
-            IConfiguration configuration)
+        // Add Entity Framework
+        services.AddDbContext<ApplicationDbContext>(options =>
+            options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+
+        // Register repositories
+        services.AddScoped<IDocumentRepository, DocumentRepository>();
+        services.AddScoped<IDocumentTypeRepository, DocumentTypeRepository>();
+        services.AddScoped<IClassificationRepository, ClassificationRepository>();
+        services.AddScoped<IProcessingQueueRepository, ProcessingQueueRepository>();
+        services.AddScoped<IDocumentMetadataRepository, DocumentMetadataRepository>();
+            
+        // Register Unit of Work
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+        // Register document source providers
+        services.AddSingleton<LocalFileSystemProvider>();
+        services.AddSingleton<FileShareProvider>();
+        services.AddSingleton<IDocumentSourceFactory, DocumentSourceFactory>();
+        services.AddScoped<IDocumentSourceProvider>(provider =>
         {
-            // Add Entity Framework
-            services.AddDbContext<ApplicationDbContext>(options =>
-                options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+            var factory = provider.GetRequiredService<IDocumentSourceFactory>();
+            var sourceType = configuration.GetValue<string>("DocumentStorage:Provider") ?? "LocalFileSystem";
+            return factory.CreateProvider(sourceType);
+        });
 
-            // Register repositories
-            services.AddScoped<IDocumentRepository, DocumentRepository>();
-            services.AddScoped<IDocumentTypeRepository, DocumentTypeRepository>();
-            services.AddScoped<IClassificationRepository, ClassificationRepository>();
-            services.AddScoped<IProcessingQueueRepository, ProcessingQueueRepository>();
-            services.AddScoped<IDocumentMetadataRepository, DocumentMetadataRepository>();
-            
-            // Register Unit of Work
-            services.AddScoped<IUnitOfWork, UnitOfWork>();
+        // Register AI processing services
+        // Change to Scoped to support scoped dependencies
+        services.AddScoped<IAIProcessorFactory, AIProcessorFactory>();
+        
+        // Register DocumentContentExtractor with service provider for transcription support
+        services.AddScoped<DocumentContentExtractor>(provider =>
+        {
+            var logger = provider.GetRequiredService<ILogger<DocumentContentExtractor>>();
+            return new DocumentContentExtractor(logger, provider);
+        });
+        
+        // Register Amazon Transcribe service for MP3 transcription
+        services.AddScoped<AmazonTranscribeService>();
 
-            // Register document source providers
-            services.AddSingleton<LocalFileSystemProvider>();
-            services.AddSingleton<FileShareProvider>();
-            services.AddSingleton<IDocumentSourceFactory, DocumentSourceFactory>();
-            services.AddScoped<IDocumentSourceProvider>(provider =>
-            {
-                var factory = provider.GetRequiredService<IDocumentSourceFactory>();
-                var sourceType = configuration.GetValue<string>("DocumentStorage:Provider") ?? "LocalFileSystem";
-                return factory.CreateProvider(sourceType);
-            });
-
-            // Register AI processing services
-            services.AddSingleton<IAIProcessorFactory, AIProcessorFactory>();
-            services.AddSingleton<DocumentContentExtractor>();
-
-            // Use database-backed queue instead of in-memory queue
-            services.AddSingleton<IAIProcessingQueue, DatabaseProcessingQueue>();
+        // Use database-backed queue instead of in-memory queue
+        services.AddSingleton<IAIProcessingQueue, DatabaseProcessingQueue>();
             
-            // Register Bedrock configuration
-            var bedrockSection = configuration.GetSection("Bedrock");
-            services.Configure<BedrockOptions>(options =>
-            {
-                bedrockSection.Bind(options);
-            });
-            //services.AddSingleton<IAIProcessor>();
+        // Register Bedrock configuration
+        var bedrockSection = configuration.GetSection("Bedrock");
+        services.Configure<BedrockOptions>(options =>
+        {
+            bedrockSection.Bind(options);
+        });
+        //services.AddSingleton<IAIProcessor>();
             
-            // Register background task services
-            var usePriorityQueue = configuration.GetValue<bool>("BackgroundTasks:UsePriorityQueue", true);
-            if (usePriorityQueue)
-            {
-                services.AddSingleton<IBackgroundTaskQueue, PriorityBackgroundTaskQueue>();
-            }
-            else
-            {
-                services.AddSingleton<IBackgroundTaskQueue, BackgroundTaskQueue>();
-            }
-            
-            // Register hosted services
-            var maxConcurrency = configuration.GetValue<int>("BackgroundTasks:MaxConcurrency", 3);
-            
-            // Register the base QueuedHostedService
-            services.AddHostedService(provider =>
-            {
-                var logger = provider.GetRequiredService<ILogger<QueuedHostedService>>();
-                var queue = provider.GetRequiredService<IBackgroundTaskQueue>();
-                logger.LogInformation("Creating QueuedHostedService");
-                return new QueuedHostedService(queue, logger);
-            });
-            
-            // Register the DocumentProcessingHostedService
-            services.AddHostedService(provider =>
-            {
-                var logger = provider.GetRequiredService<ILogger<DocumentProcessingHostedService>>();
-                var queue = provider.GetRequiredService<IBackgroundTaskQueue>();
-                logger.LogInformation($"Creating DocumentProcessingHostedService with max concurrency: {maxConcurrency}");
-                return new DocumentProcessingHostedService(queue, logger, maxConcurrency);
-            });
-            
-            // Register the AI Queue Processing Service for database-backed queue
-            services.AddHostedService<AIQueueProcessingService>();
-            
-            // Note: IDocumentProcessingService is registered in the Application layer
-
-            return services;
+        // Register background task services
+        var usePriorityQueue = configuration.GetValue<bool>("BackgroundTasks:UsePriorityQueue", true);
+        if (usePriorityQueue)
+        {
+            services.AddSingleton<IBackgroundTaskQueue, PriorityBackgroundTaskQueue>();
         }
-
-        public static IServiceCollection AddInfrastructureHealthChecks(
-            this IServiceCollection services,
-            IConfiguration configuration)
+        else
         {
-            services.AddHealthChecks()
-                .AddDbContextCheck<ApplicationDbContext>("database")
-                .AddCheck("document-storage", () =>
+            services.AddSingleton<IBackgroundTaskQueue, BackgroundTaskQueue>();
+        }
+            
+        // Register hosted services
+        var maxConcurrency = configuration.GetValue<int>("BackgroundTasks:MaxConcurrency", 3);
+            
+        // Register the base QueuedHostedService
+        services.AddHostedService(provider =>
+        {
+            var logger = provider.GetRequiredService<ILogger<QueuedHostedService>>();
+            var queue = provider.GetRequiredService<IBackgroundTaskQueue>();
+            logger.LogInformation("Creating QueuedHostedService");
+            return new QueuedHostedService(queue, logger);
+        });
+            
+        // Register the DocumentProcessingHostedService
+        services.AddHostedService(provider =>
+        {
+            var logger = provider.GetRequiredService<ILogger<DocumentProcessingHostedService>>();
+            var queue = provider.GetRequiredService<IBackgroundTaskQueue>();
+            logger.LogInformation($"Creating DocumentProcessingHostedService with max concurrency: {maxConcurrency}");
+            return new DocumentProcessingHostedService(queue, logger, maxConcurrency);
+        });
+            
+        // Register the AI Queue Processing Service for database-backed queue
+        services.AddHostedService<AIQueueProcessingService>();
+            
+        // Note: IDocumentProcessingService is registered in the Application layer
+
+        return services;
+    }
+
+    public static IServiceCollection AddInfrastructureHealthChecks(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddHealthChecks()
+            .AddDbContextCheck<ApplicationDbContext>("database")
+            .AddCheck("document-storage", () =>
+            {
+                // Simple health check for document storage
+                var provider = configuration.GetValue<string>("DocumentStorage:Provider");
+                if (string.IsNullOrEmpty(provider))
                 {
-                    // Simple health check for document storage
-                    var provider = configuration.GetValue<string>("DocumentStorage:Provider");
-                    if (string.IsNullOrEmpty(provider))
-                    {
-                        return HealthCheckResult.Unhealthy("No document storage provider configured");
-                    }
-                    return HealthCheckResult.Healthy($"Document storage provider: {provider}");
-                });
+                    return HealthCheckResult.Unhealthy("No document storage provider configured");
+                }
+                return HealthCheckResult.Healthy($"Document storage provider: {provider}");
+            });
 
-            return services;
-        }
+        return services;
+    }
 
-        public static async Task EnsureDatabaseAsync(this IServiceProvider services)
+    public static async Task EnsureDatabaseAsync(this IServiceProvider services)
+    {
+        using var scope = services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<ApplicationDbContext>>();
+
+        try
         {
-            using var scope = services.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            var logger = scope.ServiceProvider.GetRequiredService<ILogger<ApplicationDbContext>>();
-
-            try
-            {
-                logger.LogInformation("Ensuring database exists and is up to date...");
-                await context.Database.MigrateAsync();
-                logger.LogInformation("Database is ready");
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "An error occurred while migrating the database");
-                throw;
-            }
+            logger.LogInformation("Ensuring database exists and is up to date...");
+            await context.Database.MigrateAsync();
+            logger.LogInformation("Database is ready");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "An error occurred while migrating the database");
+            throw;
         }
     }
 }

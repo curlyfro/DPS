@@ -95,23 +95,23 @@
                 @foreach (var doc in _pagedDocuments)
                 {
                     <div class="col">
-                        <div class="card h-100 document-card">
+                        <div class="card h-100 document-card" @onclick="() => ViewDocument(doc)" @onclick:stopPropagation="false">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-start mb-2">
                                     <i class="bi @GetFileIcon(doc.ContentType) fs-2 text-primary"></i>
-                                    <div class="dropdown">
+                                    <div class="dropdown" @onclick:stopPropagation="true">
                                         <button class="btn btn-sm btn-light" type="button" data-bs-toggle="dropdown">
                                             <i class="bi bi-three-dots-vertical"></i>
                                         </button>
                                         <ul class="dropdown-menu">
-                                            <li><a class="dropdown-item" href="#" @onclick="() => ViewDocument(doc)">
+                                            <li><a class="dropdown-item" href="#" @onclick="() => ViewDocument(doc)" @onclick:stopPropagation="true">
                                                 <i class="bi bi-eye me-2"></i>View
                                             </a></li>
-                                            <li><a class="dropdown-item" href="#" @onclick="() => DownloadDocument(doc)">
+                                            <li><a class="dropdown-item" href="#" @onclick="() => DownloadDocument(doc)" @onclick:stopPropagation="true">
                                                 <i class="bi bi-download me-2"></i>Download
                                             </a></li>
                                             <li><hr class="dropdown-divider"></li>
-                                            <li><a class="dropdown-item text-danger" href="#" @onclick="() => DeleteDocument(doc)">
+                                            <li><a class="dropdown-item text-danger" href="#" @onclick="() => DeleteDocument(doc)" @onclick:stopPropagation="true">
                                                 <i class="bi bi-trash me-2"></i>Delete
                                             </a></li>
                                         </ul>
@@ -153,9 +153,9 @@
                     <tbody>
                         @foreach (var doc in _pagedDocuments)
                         {
-                            <tr>
-                                <td>
-                                    <input type="checkbox" class="form-check-input" 
+                            <tr @onclick="() => ViewDocument(doc)" style="cursor: pointer;">
+                                <td @onclick:stopPropagation="true">
+                                    <input type="checkbox" class="form-check-input"
                                            checked="@_selectedDocuments.Contains(doc.Id)"
                                            @onchange="() => ToggleSelection(doc.Id)">
                                 </td>
@@ -169,7 +169,7 @@
                                     <span class="badge bg-@GetStatusColor(doc.Status)">@doc.Status</span>
                                 </td>
                                 <td>@doc.CreatedAt.ToString("MMM dd, yyyy HH:mm")</td>
-                                <td>
+                                <td @onclick:stopPropagation="true">
                                     <div class="btn-group btn-group-sm" role="group">
                                         <button type="button" class="btn btn-outline-primary" @onclick="() => ViewDocument(doc)">
                                             <i class="bi bi-eye"></i>
@@ -258,39 +258,80 @@
     private string _searchQuery = "";
     private DocumentStatus? _selectedStatus;
     private string _sortBy = "date-desc";
-    private string _viewMode = "grid";
+    private string _viewMode = "list";
     
     private int _currentPage = 1;
     private int _pageSize = 12;
     private int _totalPages = 1;
     
     private Timer? _refreshTimer;
+    private bool _isRefreshing = false;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadDocuments();
         
         // Set up auto-refresh every 5 seconds to check for processing updates
-        _refreshTimer = new Timer(async _ =>
+        _refreshTimer = new Timer(
+            _ => _ = RefreshTimerCallback(),
+            null,
+            TimeSpan.FromSeconds(5),
+            TimeSpan.FromSeconds(5));
+    }
+
+    private async Task RefreshTimerCallback()
+    {
+        if (_isRefreshing)
+            return;
+            
+        try
         {
             await InvokeAsync(async () =>
             {
-                // Only refresh if there are pending/processing documents
-                if (_documents.Any(d => d.Status == DocumentStatus.Pending ||
-                                      d.Status == DocumentStatus.Processing ||
-                                      d.Status == DocumentStatus.Queued))
+                // Don't show loading spinner during auto-refresh
+                _isRefreshing = true;
+                try
                 {
-                    await LoadDocuments();
+                    var documents = (await DocumentRepository.GetAllAsync()).ToList();
+                    
+                    // Only update if documents have changed
+                    if (!documents.SequenceEqual(_documents))
+                    {
+                        _documents = documents;
+                        await ApplyFilters();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Error refreshing documents");
+                }
+                finally
+                {
+                    _isRefreshing = false;
                 }
             });
-        }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error in document list refresh timer");
+        }
     }
 
     private async Task LoadDocuments()
     {
+        if (_isRefreshing)
+            return;
+            
+        _isRefreshing = true;
         try
         {
-            _isLoading = true;
+            // Only show loading spinner on initial load, not on refresh
+            if (!_documents.Any())
+            {
+                _isLoading = true;
+                StateHasChanged();
+            }
+            
             _documents = (await DocumentRepository.GetAllAsync()).ToList();
             await ApplyFilters();
         }
@@ -301,6 +342,8 @@
         finally
         {
             _isLoading = false;
+            _isRefreshing = false;
+            StateHasChanged();
         }
     }
 
@@ -480,6 +523,7 @@
             var ct when ct?.Contains("word") == true || ct?.Contains("doc") == true => "bi-file-earmark-word-fill",
             var ct when ct?.Contains("excel") == true || ct?.Contains("spreadsheet") == true => "bi-file-earmark-excel-fill",
             var ct when ct?.Contains("image") == true => "bi-file-earmark-image-fill",
+            var ct when ct?.Contains("audio") == true || ct?.Contains("mp3") == true => "bi-file-earmark-music-fill",
             var ct when ct?.Contains("text") == true => "bi-file-earmark-text-fill",
             _ => "bi-file-earmark-fill"
         };

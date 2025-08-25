@@ -171,23 +171,50 @@
     private int failedCount = 0;
     private List<ProcessingQueue> processingQueueItems = new();
     private System.Threading.Timer? refreshTimer;
+    private bool isRefreshing = false;
 
     protected override async Task OnInitializedAsync()
     {
         await RefreshStatus();
         
-        // Set up auto-refresh timer
+        // Set up auto-refresh timer with proper async handling
         refreshTimer = new System.Threading.Timer(
-            async _ => await InvokeAsync(RefreshStatus),
+            _ => _ = RefreshTimerCallback(),
             null,
             TimeSpan.FromSeconds(3),
             TimeSpan.FromSeconds(3));
     }
 
-    private async Task RefreshStatus()
+    private async Task RefreshTimerCallback()
     {
+        // Prevent overlapping refreshes
+        if (isRefreshing)
+            return;
+            
         try
         {
+            await InvokeAsync(async () =>
+            {
+                await RefreshStatus();
+            });
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error in refresh timer callback");
+        }
+    }
+
+    private async Task RefreshStatus()
+    {
+        if (isRefreshing)
+            return;
+            
+        isRefreshing = true;
+        
+        try
+        {
+            Logger.LogDebug("RefreshStatus started at {Time}", DateTime.Now);
+            
             // Get all processing queue items from database
             // Get pending items first, then other statuses
             var pendingItems = await UnitOfWork.ProcessingQueues.GetPendingAsync(1000);
@@ -217,24 +244,42 @@
             }
 
             // Calculate counts
-            queueLength = processingQueueItems.Count(q =>
+            var newQueueLength = processingQueueItems.Count(q =>
                 q.Status == ProcessingStatus.Pending ||
                 q.Status == ProcessingStatus.Retrying);
             
-            processingCount = processingQueueItems.Count(q =>
+            var newProcessingCount = processingQueueItems.Count(q =>
                 q.Status == ProcessingStatus.InProgress);
             
-            completedCount = processingQueueItems.Count(q =>
+            var newCompletedCount = processingQueueItems.Count(q =>
                 q.Status == ProcessingStatus.Completed);
             
-            failedCount = processingQueueItems.Count(q =>
+            var newFailedCount = processingQueueItems.Count(q =>
                 q.Status == ProcessingStatus.Failed);
             
+            // Log if values changed
+            if (newQueueLength != queueLength || newProcessingCount != processingCount ||
+                newCompletedCount != completedCount || newFailedCount != failedCount)
+            {
+                Logger.LogDebug("Status changed - Queue: {Queue}, Processing: {Processing}, Completed: {Completed}, Failed: {Failed}",
+                    newQueueLength, newProcessingCount, newCompletedCount, newFailedCount);
+            }
+            
+            queueLength = newQueueLength;
+            processingCount = newProcessingCount;
+            completedCount = newCompletedCount;
+            failedCount = newFailedCount;
+            
             StateHasChanged();
+            Logger.LogDebug("RefreshStatus completed, StateHasChanged called");
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Error refreshing task status");
+        }
+        finally
+        {
+            isRefreshing = false;
         }
     }
 

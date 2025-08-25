@@ -44,7 +44,7 @@
                                 <InputFile id="fileUploadInput"
                                           OnChange="@LoadFiles"
                                           multiple
-                                          accept=".pdf,.doc,.docx,.txt,.xlsx,.xls,.jpg,.jpeg,.png"
+                                          accept=".pdf,.doc,.docx,.txt,.xlsx,.xls,.jpg,.jpeg,.png,.mp3"
                                           style="display: none;" />
                             </label>
                         </div>
@@ -403,7 +403,7 @@
 
     private bool IsValidFileType(string fileName)
     {
-        var validExtensions = new[] { ".pdf", ".doc", ".docx", ".txt", ".xlsx", ".xls", ".jpg", ".jpeg", ".png" };
+        var validExtensions = new[] { ".pdf", ".doc", ".docx", ".txt", ".xlsx", ".xls", ".jpg", ".jpeg", ".png", ".mp3" };
         var extension = Path.GetExtension(fileName).ToLowerInvariant();
         return validExtensions.Contains(extension);
     }

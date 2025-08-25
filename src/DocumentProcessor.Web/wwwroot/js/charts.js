@@ -17,7 +17,7 @@ window.initializeChart = (canvasId, type, labels, datasetLabel, data, background
             datasets: [{
                 label: datasetLabel,
                 data: data,
-                backgroundColor: type === 'doughnut' ? backgroundColor : backgroundColor,
+                backgroundColor: backgroundColor,
                 borderColor: type === 'line' ? backgroundColor : undefined,
                 borderWidth: type === 'line' ? 2 : 1,
                 fill: type === 'line' ? false : undefined,
