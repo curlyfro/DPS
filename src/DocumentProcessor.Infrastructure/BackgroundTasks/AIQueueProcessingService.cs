@@ -19,7 +19,7 @@ public class AIQueueProcessingService(
     ILogger<AIQueueProcessingService> logger)
     : BackgroundService
 {
-    private readonly int _pollingIntervalSeconds = 5; // Poll every 5 seconds
+    private readonly int _pollingIntervalSeconds = 30; // Poll every 30 seconds for better performance
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -40,7 +40,7 @@ public class AIQueueProcessingService(
                     
                 if (queueItem != null)
                 {
-                    logger.LogInformation($"Dequeued document {queueItem.DocumentId} from queue {queueItem.QueueId}");
+                    logger.LogInformation("Dequeued document {DocumentId} from queue {QueueId}", queueItem.DocumentId, queueItem.QueueId);
                         
                     // Process the document
                     await ProcessDocumentAsync(queueItem, stoppingToken);
@@ -75,7 +75,7 @@ public class AIQueueProcessingService(
             
         try
         {
-            logger.LogInformation($"Starting processing for document {queueItem.DocumentId}");
+            logger.LogInformation("Starting processing for document {DocumentId}", queueItem.DocumentId);
                 
             // Get the document processing service dynamically
             // This avoids circular dependency between Infrastructure and Application layers
@@ -124,7 +124,7 @@ public class AIQueueProcessingService(
                 
             if (success)
             {
-                logger.LogInformation($"Successfully processed document {queueItem.DocumentId}");
+                logger.LogInformation("Successfully processed document {DocumentId}", queueItem.DocumentId);
                     
                 // Update queue status to completed
                 if (processingQueue is AI.DatabaseProcessingQueue dbQueue)
@@ -157,7 +157,7 @@ public class AIQueueProcessingService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Error processing document {queueItem.DocumentId}");
+            logger.LogError(ex, "Error processing document {DocumentId}", queueItem.DocumentId);
                 
             // Update queue status to failed or retry
             if (processingQueue is AI.DatabaseProcessingQueue dbQueue)

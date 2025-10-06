@@ -108,11 +108,23 @@ public class BedrockAIProcessor : IAIProcessor
         }
         catch (Amazon.Runtime.AmazonServiceException ex)
         {
-            _logger.LogError(ex, "AWS service error while classifying document {DocumentId}", document.Id);
+            _logger.LogError(ex, "AWS service error while classifying document {DocumentId}. Error Code: {ErrorCode}, Status: {StatusCode}, Request ID: {RequestId}", 
+                document.Id, ex.ErrorCode, ex.StatusCode, ex.RequestId);
+            
+            string errorDetail = $"AWS Error: {ex.Message}";
+            if (!string.IsNullOrEmpty(ex.ErrorCode))
+            {
+                errorDetail += $" (Error Code: {ex.ErrorCode})";
+            }
+            if (ex.StatusCode != System.Net.HttpStatusCode.OK)
+            {
+                errorDetail += $" (Status: {ex.StatusCode})";
+            }
+            
             return new DocumentClassificationResult
             {
                 PrimaryCategory = "Error: AWS Service Issue",
-                ProcessingNotes = $"AWS Error: {ex.Message}. Status Code: {ex.StatusCode}",
+                ProcessingNotes = errorDetail + ". Please check AWS credentials, permissions, and Bedrock model access.",
                 ProcessingTime = DateTime.UtcNow - startTime
             };
         }
@@ -239,10 +251,22 @@ public class BedrockAIProcessor : IAIProcessor
         }
         catch (Amazon.Runtime.AmazonServiceException ex)
         {
-            _logger.LogError(ex, "AWS service error while summarizing document {DocumentId}", document.Id);
+            _logger.LogError(ex, "AWS service error while summarizing document {DocumentId}. Error Code: {ErrorCode}, Status: {StatusCode}, Request ID: {RequestId}", 
+                document.Id, ex.ErrorCode, ex.StatusCode, ex.RequestId);
+            
+            string errorDetail = $"AWS Service Error: {ex.Message}";
+            if (!string.IsNullOrEmpty(ex.ErrorCode))
+            {
+                errorDetail += $" (Error Code: {ex.ErrorCode})";
+            }
+            if (ex.StatusCode != System.Net.HttpStatusCode.OK)
+            {
+                errorDetail += $" (Status: {ex.StatusCode})";
+            }
+            
             return new DocumentSummaryResult
             {
-                Summary = $"AWS Service Error: {ex.Message} (Status: {ex.StatusCode}). Please check your AWS configuration and permissions.",
+                Summary = errorDetail + ". Please check AWS credentials, permissions, and Bedrock model access.",
                 ProcessingTime = DateTime.UtcNow - startTime
             };
         }
@@ -365,7 +389,7 @@ public class BedrockAIProcessor : IAIProcessor
         const int maxCharacters = 50000; // Approximately 12,500 tokens
         if (content.Length > maxCharacters)
         {
-            _logger.LogWarning($"Document content truncated from {content.Length} to {maxCharacters} characters");
+            _logger.LogWarning("Document content truncated from {OriginalLength} to {MaxCharacters} characters", content.Length, maxCharacters);
             content = content.Substring(0, maxCharacters) + "\n\n[Content truncated due to length...]";
         }
             
@@ -537,8 +561,13 @@ Example response:
     {
         try
         {
-            // The Converse API should return clean JSON
-            var json = JsonDocument.Parse(response);
+            // Clean the response by removing any markdown code formatting
+            string cleanedResponse = CleanJsonResponse(response);
+            
+            _logger.LogDebug("Cleaned classification response: {CleanedResponse}", cleanedResponse);
+            
+            // Parse the cleaned JSON
+            var json = JsonDocument.Parse(cleanedResponse);
             var root = json.RootElement;
 
             var result = new DocumentClassificationResult
@@ -578,8 +607,13 @@ Example response:
     {
         try
         {
-            // The Converse API should return clean JSON
-            var json = JsonDocument.Parse(response);
+            // Clean the response by removing any markdown code formatting or backticks
+            string cleanedResponse = CleanJsonResponse(response);
+            
+            _logger.LogDebug("Cleaned response for parsing: {CleanedResponse}", cleanedResponse);
+            
+            // Parse the cleaned JSON
+            var json = JsonDocument.Parse(cleanedResponse);
             var root = json.RootElement;
 
             var result = new DocumentExtractionResult();
@@ -611,6 +645,39 @@ Example response:
             return new DocumentExtractionResult();
         }
     }
+    
+    /// <summary>
+    /// Cleans a response string by removing any markdown code formatting and other non-JSON content
+    /// </summary>
+    private string CleanJsonResponse(string response)
+    {
+        if (string.IsNullOrEmpty(response))
+        {
+            return "{}";
+        }
+        
+        // Remove markdown code block formatting
+        var cleaned = response
+            .Replace("```json", "")
+            .Replace("```", "")
+            .Trim();
+            
+        // Find the first '{' and last '}' to extract just the JSON portion
+        int startIndex = cleaned.IndexOf('{');
+        int endIndex = cleaned.LastIndexOf('}');
+        
+        if (startIndex >= 0 && endIndex > startIndex)
+        {
+            cleaned = cleaned.Substring(startIndex, endIndex - startIndex + 1);
+        }
+        else
+        {
+            _logger.LogWarning("Could not find valid JSON object markers in response. Response: {Response}", response);
+            return "{}";
+        }
+        
+        return cleaned;
+    }
 
     private DocumentSummaryResult ParseSummaryResponse(string response)
     {
@@ -641,8 +708,13 @@ Example response:
     {
         try
         {
-            // The Converse API should return clean JSON
-            var json = JsonDocument.Parse(response);
+            // Clean the response by removing any markdown code formatting
+            string cleanedResponse = CleanJsonResponse(response);
+            
+            _logger.LogDebug("Cleaned intent response: {CleanedResponse}", cleanedResponse);
+            
+            // Parse the cleaned JSON
+            var json = JsonDocument.Parse(cleanedResponse);
             var root = json.RootElement;
 
             var result = new DocumentIntentResult

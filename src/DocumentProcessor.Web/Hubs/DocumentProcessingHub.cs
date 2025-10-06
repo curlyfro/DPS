@@ -7,14 +7,14 @@ public class DocumentProcessingHub(ILogger<DocumentProcessingHub> logger) : Hub
 {
     public override async Task OnConnectedAsync()
     {
-        logger.LogInformation($"Client connected: {Context.ConnectionId}");
+        logger.LogInformation("Client connected: {ConnectionId}", Context.ConnectionId);
         await Clients.Caller.SendAsync("Connected", Context.ConnectionId);
         await base.OnConnectedAsync();
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        logger.LogInformation($"Client disconnected: {Context.ConnectionId}");
+        logger.LogInformation("Client disconnected: {ConnectionId}", Context.ConnectionId);
         await base.OnDisconnectedAsync(exception);
     }
 
@@ -22,21 +22,21 @@ public class DocumentProcessingHub(ILogger<DocumentProcessingHub> logger) : Hub
     public async Task SubscribeToDocument(string documentId)
     {
         await Groups.AddToGroupAsync(Context.ConnectionId, $"doc-{documentId}");
-        logger.LogInformation($"Client {Context.ConnectionId} subscribed to document {documentId}");
+        logger.LogInformation("Client {ConnectionId} subscribed to document {DocumentId}", Context.ConnectionId, documentId);
     }
 
     // Unsubscribe from document updates
     public async Task UnsubscribeFromDocument(string documentId)
     {
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"doc-{documentId}");
-        logger.LogInformation($"Client {Context.ConnectionId} unsubscribed from document {documentId}");
+        logger.LogInformation("Client {ConnectionId} unsubscribed from document {DocumentId}", Context.ConnectionId, documentId);
     }
 
     // Subscribe to all document updates
     public async Task SubscribeToAllDocuments()
     {
         await Groups.AddToGroupAsync(Context.ConnectionId, "all-documents");
-        logger.LogInformation($"Client {Context.ConnectionId} subscribed to all documents");
+        logger.LogInformation("Client {ConnectionId} subscribed to all documents", Context.ConnectionId);
     }
 
     // Server-side methods to send notifications (called from services)

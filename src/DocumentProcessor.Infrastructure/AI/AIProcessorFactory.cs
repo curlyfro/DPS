@@ -48,19 +48,19 @@ public class AIProcessorFactory : IAIProcessorFactory
     {
         if (!_processorFactories.TryGetValue(providerType, out var factory))
         {
-            _logger.LogWarning($"AI Provider {providerType} not available, falling back to Mock provider");
+            _logger.LogWarning("AI Provider {ProviderType} not available, falling back to Mock provider", providerType);
             return _processorFactories[AIProviderType.AmazonBedrock]();
         }
 
         try
         {
             var processor = factory();
-            _logger.LogInformation($"Created AI processor: {processor.ProviderName} ({processor.ModelId})");
+            _logger.LogInformation("Created AI processor: {ProviderName} ({ModelId})", processor.ProviderName, processor.ModelId);
             return processor;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Failed to create AI processor for {providerType}, falling back to AmazonBedrock");
+            _logger.LogError(ex, "Failed to create AI processor for {ProviderType}, falling back to AmazonBedrock", providerType);
             return _processorFactories[AIProviderType.AmazonBedrock]();
         }
     }

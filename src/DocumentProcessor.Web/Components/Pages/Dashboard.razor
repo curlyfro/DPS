@@ -298,6 +298,17 @@
     {
         if (firstRender || (!chartsInitialized && processingActivityData.Any()))
         {
+            // Add delay to ensure Chart.js is loaded and DOM is ready
+            await Task.Delay(500);
+            
+            // Verify Chart.js is available
+            var chartAvailable = await JSRuntime.InvokeAsync<bool>("eval", "typeof Chart !== 'undefined'");
+            if (!chartAvailable)
+            {
+                Logger.LogError("Chart.js is not loaded - charts will not display");
+                return;
+            }
+            
             await InitializeCharts();
             chartsInitialized = true;
         }
@@ -365,14 +376,20 @@
             // Prepare document type data
             documentTypeData.Clear();
             var documentTypes = await UnitOfWork.DocumentTypes.GetAllAsync();
+            Logger.LogInformation("Dashboard: Loaded {Count} document types from database", documentTypes.Count());
+            
             foreach (var type in documentTypes)
             {
                 var count = allDocuments.Count(d => d.DocumentTypeId == type.Id);
+                Logger.LogDebug("Dashboard: Document type '{TypeName}' has {Count} documents", type.Name, count);
                 if (count > 0)
                 {
                     documentTypeData[type.Name] = count;
+                    Logger.LogInformation("Dashboard: Added document type '{TypeName}' with {Count} documents to chart", type.Name, count);
                 }
             }
+            
+            Logger.LogInformation("Dashboard: Final document type chart data has {Count} items", documentTypeData.Count);
 
             // Add uncategorized documents
             var uncategorizedCount = allDocuments.Count(d => d.DocumentTypeId == null);
@@ -405,10 +422,14 @@
     {
         try
         {
+            Logger.LogInformation("InitializeCharts called - Activity data: {ActivityCount}, Document type data: {TypeCount}", 
+                processingActivityData.Count, documentTypeData.Count);
+
             // Initialize processing activity chart
             var activityLabels = processingActivityData.Keys.ToArray();
             var activityValues = processingActivityData.Values.ToArray();
             
+            Logger.LogInformation("Initializing activity chart with {Count} data points", activityLabels.Length);
             await JSRuntime.InvokeVoidAsync("initializeChart",
                 "activityChart",
                 "line",
@@ -424,6 +445,9 @@
                 var typeValues = documentTypeData.Values.ToArray();
                 var colors = GenerateColors(typeLabels.Length);
                 
+                Logger.LogInformation("Initializing document type chart with labels: {Labels}, values: {Values}", 
+                    string.Join(",", typeLabels), string.Join(",", typeValues));
+                
                 await JSRuntime.InvokeVoidAsync("initializeChart",
                     "typeChart",
                     "doughnut",
@@ -431,6 +455,10 @@
                     "Document Count",
                     typeValues,
                     colors);
+            }
+            else
+            {
+                Logger.LogWarning("No document type data available for chart initialization");
             }
         }
         catch (Exception ex)

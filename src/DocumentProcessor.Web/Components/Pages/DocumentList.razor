@@ -7,6 +7,7 @@
 @inject IDocumentSourceProvider DocumentSource
 @inject ILogger<DocumentList> Logger
 @inject NavigationManager Navigation
+@inject IServiceProvider ServiceProvider
 @rendermode InteractiveServer
 @implements IDisposable
 
@@ -451,8 +452,43 @@
     {
         try
         {
-            await DocumentRepository.DeleteAsync(document.Id);
-            await DocumentSource.DeleteDocumentAsync(document.StoragePath);
+            Logger.LogInformation("Deleting document: {DocumentId} - {FileName}", document.Id, document.FileName);
+            
+            // First, clean up any processing queue entries for this document
+            using var scope = ServiceProvider.CreateScope();
+            var processingQueueRepo = scope.ServiceProvider.GetService<IProcessingQueueRepository>();
+            
+            if (processingQueueRepo != null)
+            {
+                try
+                {
+                    var queueItems = await processingQueueRepo.GetByDocumentIdAsync(document.Id);
+                    foreach (var queueItem in queueItems)
+                    {
+                        Logger.LogInformation("Removing processing queue item: {QueueId}", queueItem.Id);
+                        await processingQueueRepo.DeleteAsync(queueItem.Id);
+                    }
+                }
+                catch (Exception queueEx)
+                {
+                    Logger.LogWarning(queueEx, "Error cleaning up processing queue for document: {DocumentId}", document.Id);
+                }
+            }
+            
+            // Delete the document from the repository (soft delete)
+            await DocumentRepository.SoftDeleteAsync(document.Id);
+            
+            // Delete the physical file
+            try
+            {
+                await DocumentSource.DeleteDocumentAsync(document.StoragePath);
+            }
+            catch (Exception fileEx)
+            {
+                Logger.LogWarning(fileEx, "Error deleting physical file for document: {DocumentId}", document.Id);
+            }
+            
+            Logger.LogInformation("Successfully deleted document: {DocumentId}", document.Id);
             await LoadDocuments();
         }
         catch (Exception ex)

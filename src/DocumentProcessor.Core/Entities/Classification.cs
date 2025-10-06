@@ -25,9 +25,6 @@ namespace DocumentProcessor.Core.Entities
 
     public enum ClassificationMethod
     {
-        Manual,
-        RuleBased,
-        AI,
-        Hybrid
+        AI
     }
 }

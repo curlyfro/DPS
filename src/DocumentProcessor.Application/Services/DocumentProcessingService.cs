@@ -2,6 +2,7 @@ using DocumentProcessor.Core.Entities;
 using DocumentProcessor.Core.Interfaces;
 using DocumentProcessor.Infrastructure.Repositories;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 using System.Linq;
 using System.Text.Json;
 
@@ -10,33 +11,42 @@ namespace DocumentProcessor.Application.Services;
 public class DocumentProcessingService(
     IAIProcessorFactory aiProcessorFactory,
     IAIProcessingQueue processingQueue,
-    IDocumentRepository documentRepository,
     IDocumentSourceProvider documentSource,
-    IUnitOfWork unitOfWork,
+    IServiceScopeFactory serviceScopeFactory,
     ILogger<DocumentProcessingService> logger)
     : IDocumentProcessingService
 {
     public async Task<Guid> QueueDocumentForProcessingAsync(Guid documentId, ProcessingPriority priority = ProcessingPriority.Normal)
     {
+        // Use a separate service scope to avoid tracking conflicts
+        using var scope = serviceScopeFactory.CreateScope();
+        var documentRepository = scope.ServiceProvider.GetRequiredService<IDocumentRepository>();
+        
         var document = await documentRepository.GetByIdAsync(documentId);
         if (document == null)
         {
             throw new ArgumentException($"Document with ID {documentId} not found");
         }
 
-        // Update document status
+        // Update document status using normal EF tracking in separate scope
         document.Status = DocumentStatus.Queued;
+        document.UpdatedAt = DateTime.UtcNow;
         await documentRepository.UpdateAsync(document);
 
         // Add to processing queue
         var queueId = await processingQueue.EnqueueDocumentAsync(documentId, priority);
             
-        logger.LogInformation($"Document {documentId} queued for processing with queue ID {queueId}");
+        logger.LogInformation("Document {DocumentId} queued for processing with queue ID {QueueId}", documentId, queueId);
         return queueId;
     }
 
     public async Task<DocumentProcessingResult> ProcessDocumentAsync(Guid documentId, AIProviderType? providerType = null)
     {
+        // Use a separate service scope to avoid tracking conflicts
+        using var scope = serviceScopeFactory.CreateScope();
+        var documentRepository = scope.ServiceProvider.GetRequiredService<IDocumentRepository>();
+        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        
         var document = await documentRepository.GetByIdAsync(documentId);
         if (document == null)
         {
@@ -51,8 +61,9 @@ public class DocumentProcessingService(
 
         try
         {
-            // Update document status
+            // Update document status using normal EF tracking
             document.Status = DocumentStatus.Processing;
+            document.UpdatedAt = DateTime.UtcNow;
             await documentRepository.UpdateAsync(document);
 
             // Get AI processor
@@ -60,7 +71,7 @@ public class DocumentProcessingService(
                 ? aiProcessorFactory.CreateProcessor(providerType.Value)
                 : aiProcessorFactory.GetDefaultProcessor();
 
-            logger.LogInformation($"Processing document {documentId} with {processor.ProviderName}");
+            logger.LogInformation("Processing document {DocumentId} with {ProviderName}", documentId, processor.ProviderName);
 
             // Get document content - create separate streams for each AI operation
             // to avoid "Cannot access a closed file" errors
@@ -84,9 +95,10 @@ public class DocumentProcessingService(
             result.Summary = await summaryTask;
             result.Intent = await intentTask;
 
-            // Update document with processing results
+            // Update document with processing results using the same tracked instance
             document.Status = DocumentStatus.Processed;
             document.ProcessedAt = DateTime.UtcNow;
+            document.UpdatedAt = DateTime.UtcNow;
                 
             // Store the summary directly without prepending classification
             if (result.Summary != null && !string.IsNullOrEmpty(result.Summary.Summary))
@@ -171,7 +183,7 @@ public class DocumentProcessingService(
                     WordCount = document.ExtractedText?.Split(' ').Length ?? 0,
                     Keywords = result.Classification?.Tags != null ? string.Join(", ", result.Classification.Tags) : "",
                     Subject = result.Classification?.PrimaryCategory ?? "",
-                    Tags = new Dictionary<string, string>(),
+                    Tags = JsonSerializer.Serialize(new Dictionary<string, string>()),
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
@@ -179,10 +191,12 @@ public class DocumentProcessingService(
                 // Add extracted entities as tags
                 if (result.Extraction?.Entities != null)
                 {
+                    var tags = new Dictionary<string, string>();
                     foreach (var entity in result.Extraction.Entities.Take(10)) // Limit to 10 entities
                     {
-                        metadata.Tags[entity.Type] = entity.Value;
+                        tags[entity.Type] = entity.Value;
                     }
+                    metadata.Tags = JsonSerializer.Serialize(tags);
                 }
 
                 await unitOfWork.DocumentMetadata.AddAsync(metadata);
@@ -200,10 +214,18 @@ public class DocumentProcessingService(
                 // Update tags with extracted entities
                 if (result.Extraction?.Entities != null)
                 {
+                    // Deserialize existing tags or create new dictionary
+                    var tags = string.IsNullOrEmpty(existingMetadata.Tags)
+                        ? new Dictionary<string, string>()
+                        : JsonSerializer.Deserialize<Dictionary<string, string>>(existingMetadata.Tags) ?? new Dictionary<string, string>();
+                    
                     foreach (var entity in result.Extraction.Entities.Take(10))
                     {
-                        existingMetadata.Tags[entity.Type] = entity.Value;
+                        tags[entity.Type] = entity.Value;
                     }
+                    
+                    // Serialize back to JSON string
+                    existingMetadata.Tags = JsonSerializer.Serialize(tags);
                 }
 
                 await unitOfWork.DocumentMetadata.UpdateAsync(existingMetadata);
@@ -214,17 +236,24 @@ public class DocumentProcessingService(
             // Save all changes through unit of work
             await unitOfWork.SaveChangesAsync();
 
+            // Update any corresponding queue items to completed status
+            await UpdateQueueItemsStatusAsync(documentId, true, null);
+
             result.Success = true;
             result.CompletedAt = DateTime.UtcNow;
                 
-            logger.LogInformation($"Successfully processed document {documentId}");
+            logger.LogInformation("Successfully processed document {DocumentId}", documentId);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Error processing document {documentId}");
+            logger.LogError(ex, "Error processing document {DocumentId}", documentId);
                 
             document.Status = DocumentStatus.Failed;
+            document.UpdatedAt = DateTime.UtcNow;
             await documentRepository.UpdateAsync(document);
+
+            // Update any corresponding queue items to failed status
+            await UpdateQueueItemsStatusAsync(documentId, false, ex.Message);
 
             result.Success = false;
             result.ErrorMessage = ex.Message;
@@ -251,6 +280,10 @@ public class DocumentProcessingService(
 
     public async Task<ProcessingCost> EstimateProcessingCostAsync(Guid documentId, AIProviderType? providerType = null)
     {
+        // Use a separate service scope to avoid tracking conflicts
+        using var scope = serviceScopeFactory.CreateScope();
+        var documentRepository = scope.ServiceProvider.GetRequiredService<IDocumentRepository>();
+        
         var document = await documentRepository.GetByIdAsync(documentId);
         if (document == null)
         {
@@ -262,5 +295,44 @@ public class DocumentProcessingService(
             : aiProcessorFactory.GetDefaultProcessor();
 
         return await processor.EstimateCostAsync(document.FileSize, document.ContentType);
+    }
+
+    private async Task UpdateQueueItemsStatusAsync(Guid documentId, bool success, string? errorMessage)
+    {
+        try
+        {
+            // Use a separate scope to avoid tracking conflicts
+            using var scope = serviceScopeFactory.CreateScope();
+            var processingQueueRepo = scope.ServiceProvider.GetService<IProcessingQueueRepository>();
+            
+            if (processingQueueRepo != null)
+            {
+                // Find all queue items for this document
+                var queueItems = await processingQueueRepo.GetByDocumentIdAsync(documentId);
+                
+                foreach (var queueItem in queueItems)
+                {
+                    // Only update items that are still pending or in progress
+                    if (queueItem.Status == ProcessingStatus.Pending || queueItem.Status == ProcessingStatus.InProgress)
+                    {
+                        if (success)
+                        {
+                            logger.LogInformation("Marking queue item {QueueItemId} as completed for document {DocumentId}", queueItem.Id, documentId);
+                            await processingQueueRepo.CompleteProcessingAsync(queueItem.Id, "Processed by direct call");
+                        }
+                        else
+                        {
+                            logger.LogInformation("Marking queue item {QueueItemId} as failed for document {DocumentId}", queueItem.Id, documentId);
+                            await processingQueueRepo.FailProcessingAsync(queueItem.Id, errorMessage ?? "Processing failed", null);
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error updating queue items status for document {DocumentId}", documentId);
+            // Don't throw - this is a secondary operation and shouldn't fail the main processing
+        }
     }
 }

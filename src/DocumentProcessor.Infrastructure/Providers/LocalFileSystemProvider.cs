@@ -38,7 +38,9 @@ namespace DocumentProcessor.Infrastructure.Providers
                     throw new FileNotFoundException($"Document not found at path: {path}");
                 }
 
-                return await Task.FromResult(new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read));
+                // Use FileShare.ReadWrite to allow other processes to access the file while we're reading it
+                // This helps prevent file locking issues when the same file is accessed multiple times
+                return await Task.FromResult(new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite));
             }
             catch (Exception ex)
             {
@@ -134,9 +136,38 @@ namespace DocumentProcessor.Infrastructure.Providers
                 var fullPath = GetFullPath(path);
                 if (File.Exists(fullPath))
                 {
-                    await Task.Run(() => File.Delete(fullPath));
-                    _logger.LogInformation("Document deleted: {Path}", path);
-                    return true;
+                    // Implement retry logic with a maximum number of attempts
+                    int maxRetries = 3;
+                    int delayMs = 500;
+                    
+                    for (int attempt = 1; attempt <= maxRetries; attempt++)
+                    {
+                        try
+                        {
+                            // Try to delete the file
+                            File.Delete(fullPath);
+                            _logger.LogInformation("Document deleted: {Path}", path);
+                            return true;
+                        }
+                        catch (IOException ex) when (ex.Message.Contains("being used by another process"))
+                        {
+                            if (attempt < maxRetries)
+                            {
+                                _logger.LogWarning("File is in use, waiting before retry {Attempt}/{MaxRetries}: {Path}",
+                                    attempt, maxRetries, path);
+                                await Task.Delay(delayMs * attempt);
+                            }
+                            else
+                            {
+                                _logger.LogWarning("File is still in use after {MaxRetries} attempts, cannot delete: {Path}", maxRetries, path);
+                                // Return false but don't throw on the final attempt
+                                return false;
+                            }
+                        }
+                    }
+                    
+                    // Should never reach here due to return statements above
+                    return false;
                 }
 
                 _logger.LogWarning("Document not found for deletion: {Path}", path);
@@ -250,67 +281,6 @@ namespace DocumentProcessor.Infrastructure.Providers
             return await Task.FromResult($"file:///{fullPath.Replace('\\', '/')}");
         }
 
-        public async Task<bool> MoveDocumentAsync(string sourcePath, string destinationPath)
-        {
-            try
-            {
-                var sourceFullPath = GetFullPath(sourcePath);
-                var destFullPath = GetFullPath(destinationPath);
-
-                if (!File.Exists(sourceFullPath))
-                {
-                    _logger.LogWarning("Source document not found: {Path}", sourcePath);
-                    return false;
-                }
-
-                // Ensure destination directory exists
-                var destDirectory = Path.GetDirectoryName(destFullPath);
-                if (!string.IsNullOrEmpty(destDirectory))
-                {
-                    EnsureDirectoryExists(destDirectory);
-                }
-
-                await Task.Run(() => File.Move(sourceFullPath, destFullPath, true));
-                _logger.LogInformation("Document moved from {Source} to {Destination}", sourcePath, destinationPath);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error moving document from {Source} to {Destination}", sourcePath, destinationPath);
-                throw;
-            }
-        }
-
-        public async Task<bool> CopyDocumentAsync(string sourcePath, string destinationPath)
-        {
-            try
-            {
-                var sourceFullPath = GetFullPath(sourcePath);
-                var destFullPath = GetFullPath(destinationPath);
-
-                if (!File.Exists(sourceFullPath))
-                {
-                    _logger.LogWarning("Source document not found: {Path}", sourcePath);
-                    return false;
-                }
-
-                // Ensure destination directory exists
-                var destDirectory = Path.GetDirectoryName(destFullPath);
-                if (!string.IsNullOrEmpty(destDirectory))
-                {
-                    EnsureDirectoryExists(destDirectory);
-                }
-
-                await Task.Run(() => File.Copy(sourceFullPath, destFullPath, true));
-                _logger.LogInformation("Document copied from {Source} to {Destination}", sourcePath, destinationPath);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error copying document from {Source} to {Destination}", sourcePath, destinationPath);
-                throw;
-            }
-        }
 
         private string GetFullPath(string relativePath)
         {

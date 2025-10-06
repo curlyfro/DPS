@@ -12,4 +12,6 @@ public interface IBackgroundDocumentProcessingService
     Task<BackgroundTaskStatus?> GetProcessingStatusAsync(string taskId);
         
     Task<int> GetQueueLengthAsync();
+    
+    Task CleanupStuckDocumentsAsync(int timeoutMinutes = 30);
 }

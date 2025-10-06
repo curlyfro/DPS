@@ -17,8 +17,6 @@ namespace DocumentProcessor.Core.Interfaces
         Task<DocumentInfo> GetDocumentInfoAsync(string path);
         Task<IEnumerable<DocumentInfo>> ListDocumentsAsync(string path);
         Task<string> GetDownloadUrlAsync(string path, TimeSpan expiration);
-        Task<bool> MoveDocumentAsync(string sourcePath, string destinationPath);
-        Task<bool> CopyDocumentAsync(string sourcePath, string destinationPath);
     }
 
     public class DocumentInfo

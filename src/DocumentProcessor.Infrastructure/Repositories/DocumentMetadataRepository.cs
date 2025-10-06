@@ -141,16 +141,16 @@ namespace DocumentProcessor.Infrastructure.Repositories
                 
             if (metadata != null)
             {
-                // Ensure Tags is initialized
-                if (metadata.Tags == null)
-                {
-                    metadata.Tags = new Dictionary<string, string>();
-                }
+                // Deserialize existing tags or create new dictionary
+                var tags = string.IsNullOrEmpty(metadata.Tags)
+                    ? new Dictionary<string, string>()
+                    : JsonSerializer.Deserialize<Dictionary<string, string>>(metadata.Tags) ?? new Dictionary<string, string>();
                 
-                // Create a new dictionary to force change detection
-                var newTags = new Dictionary<string, string>(metadata.Tags);
-                newTags[key] = value;
-                metadata.Tags = newTags;
+                // Add or update the tag
+                tags[key] = value;
+                
+                // Serialize back to JSON string
+                metadata.Tags = JsonSerializer.Serialize(tags);
                 metadata.UpdatedAt = DateTime.UtcNow;
                 
                 // Force EF Core to detect the change
@@ -169,19 +169,26 @@ namespace DocumentProcessor.Infrastructure.Repositories
                 .Where(m => m.Id == metadataId)
                 .FirstOrDefaultAsync();
                 
-            if (metadata != null && metadata.Tags != null && metadata.Tags.ContainsKey(key))
+            if (metadata != null && !string.IsNullOrEmpty(metadata.Tags))
             {
-                // Create a new dictionary to force change detection
-                var newTags = new Dictionary<string, string>(metadata.Tags);
-                newTags.Remove(key);
-                metadata.Tags = newTags;
-                metadata.UpdatedAt = DateTime.UtcNow;
+                // Deserialize existing tags
+                var tags = JsonSerializer.Deserialize<Dictionary<string, string>>(metadata.Tags);
                 
-                // Force EF Core to detect the change
-                _context.Update(metadata);
-                
-                var savedCount = await _context.SaveChangesAsync();
-                return savedCount > 0;
+                if (tags != null && tags.ContainsKey(key))
+                {
+                    // Remove the tag
+                    tags.Remove(key);
+                    
+                    // Serialize back to JSON string
+                    metadata.Tags = JsonSerializer.Serialize(tags);
+                    metadata.UpdatedAt = DateTime.UtcNow;
+                    
+                    // Force EF Core to detect the change
+                    _context.Update(metadata);
+                    
+                    var savedCount = await _context.SaveChangesAsync();
+                    return savedCount > 0;
+                }
             }
             return false;
         }

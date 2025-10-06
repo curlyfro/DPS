@@ -38,9 +38,7 @@ namespace DocumentProcessor.Core.Entities
     {
         LocalUpload,
         S3,
-        FileShare,
-        Email,
-        Api
+        FileShare
     }
 
     public enum DocumentStatus

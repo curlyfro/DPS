@@ -2,8 +2,13 @@
 window.charts = {};
 
 window.initializeChart = (canvasId, type, labels, datasetLabel, data, backgroundColor) => {
+    console.log('Initializing chart:', canvasId, 'type:', type, 'labels:', labels, 'data:', data);
     const ctx = document.getElementById(canvasId);
-    if (!ctx) return;
+    if (!ctx) {
+        console.error('Canvas element not found:', canvasId);
+        return;
+    }
+    console.log('Canvas element found successfully:', canvasId);
 
     // Destroy existing chart if it exists
     if (window.charts[canvasId]) {
@@ -47,7 +52,12 @@ window.initializeChart = (canvasId, type, labels, datasetLabel, data, background
         }
     };
 
-    window.charts[canvasId] = new Chart(ctx, config);
+    try {
+        window.charts[canvasId] = new Chart(ctx, config);
+        console.log('Chart created successfully:', canvasId);
+    } catch (error) {
+        console.error('Error creating chart:', canvasId, error);
+    }
 };
 
 window.updateChart = (canvasId, labels, data) => {

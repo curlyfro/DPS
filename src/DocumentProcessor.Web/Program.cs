@@ -31,8 +31,6 @@ builder.Services.AddInfrastructureServices(builder.Configuration);
 // Add application services (Document processing, Background services)
 builder.Services.AddApplicationServices();
 
-// TEST: Add a simple background service to verify hosting is working
-builder.Services.AddHostedService<DocumentProcessor.Web.TestBackgroundService>();
 
 // Add ASP.NET Core Identity
 builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
@@ -115,8 +113,78 @@ var app = builder.Build();
 // Ensure database is created and migrations are applied
 await app.Services.EnsureDatabaseAsync();
 
+// Initialize stored procedures
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    await DocumentProcessor.Infrastructure.Data.StoredProcedureInitializer.InitializeStoredProceduresAsync(context, logger);
+}
+
+// Seed test document types if none exist
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    
+    if (!context.DocumentTypes.Any(dt => dt.IsActive))
+    {
+        logger.LogInformation("Seeding test document types...");
+        
+        var documentTypes = new[]
+        {
+            new DocumentType
+            {
+                Id = Guid.NewGuid(),
+                Name = "PDF Documents",
+                Description = "Portable Document Format files",
+                Category = "General",
+                IsActive = true,
+                Priority = 1,
+                FileExtensions = ".pdf",
+                Keywords = "pdf,document,portable",
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            },
+            new DocumentType
+            {
+                Id = Guid.NewGuid(),
+                Name = "Word Documents",
+                Description = "Microsoft Word documents",
+                Category = "General",
+                IsActive = true,
+                Priority = 2,
+                FileExtensions = ".docx,.doc",
+                Keywords = "word,document,microsoft",
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            },
+            new DocumentType
+            {
+                Id = Guid.NewGuid(),
+                Name = "Excel Spreadsheets",
+                Description = "Microsoft Excel spreadsheet files",
+                Category = "Data",
+                IsActive = true,
+                Priority = 3,
+                FileExtensions = ".xlsx,.xls",
+                Keywords = "excel,spreadsheet,data",
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            }
+        };
+        
+        context.DocumentTypes.AddRange(documentTypes);
+        await context.SaveChangesAsync();
+        
+        logger.LogInformation("Test document types seeded successfully");
+    }
+}
+
+
 // Seed initial roles and admin user
-await SeedIdentityData(app.Services);
+// Temporarily commented out for testing
+// await SeedIdentityData(app.Services);
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -147,15 +215,22 @@ app.UseAntiforgery();
 // Serve static files from wwwroot
 app.UseStaticFiles();
 
+
 // Serve files from the uploads directory
+string uploadsPath = Path.Combine(builder.Environment.ContentRootPath, "uploads");
+
+// Ensure the uploads directory exists before creating the PhysicalFileProvider
+if (!Directory.Exists(uploadsPath))
+{
+    Directory.CreateDirectory(uploadsPath);
+}
+
 app.UseStaticFiles(new StaticFileOptions
 {
-    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(
-        Path.Combine(builder.Environment.ContentRootPath, "uploads")),
+    FileProvider = new PhysicalFileProvider(uploadsPath),
     RequestPath = "/uploads"
 });
 
-app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
@@ -173,54 +248,15 @@ app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthC
     Predicate = check => check.Tags.Contains("live")
 });
 
-app.Run();
-
-// Helper method to seed initial data
-async Task SeedIdentityData(IServiceProvider services)
+// Add cleanup endpoint for stuck documents
+app.MapGet("/admin/cleanup-stuck-documents", async (IServiceProvider services) =>
 {
     using var scope = services.CreateScope();
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
-    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+    var backgroundService = scope.ServiceProvider.GetRequiredService<DocumentProcessor.Application.Services.IBackgroundDocumentProcessingService>();
+    
+    await backgroundService.CleanupStuckDocumentsAsync(30); // 30 minutes timeout
+    
+    return Results.Ok(new { message = "Stuck documents cleanup initiated" });
+});
 
-    // Seed roles
-    string[] roleNames = { "Administrator", "Manager", "User" };
-    foreach (var roleName in roleNames)
-    {
-        var roleExists = await roleManager.RoleExistsAsync(roleName);
-        if (!roleExists)
-        {
-            var role = new ApplicationRole
-            {
-                Name = roleName,
-                Description = $"{roleName} role for document processing system",
-                CreatedAt = DateTime.UtcNow,
-                IsActive = true
-            };
-            await roleManager.CreateAsync(role);
-        }
-    }
-
-    // Seed admin user
-    var adminEmail = "admin@documentprocessor.com";
-    var adminUser = await userManager.FindByEmailAsync(adminEmail);
-    if (adminUser == null)
-    {
-        adminUser = new ApplicationUser
-        {
-            UserName = adminEmail,
-            Email = adminEmail,
-            FirstName = "System",
-            LastName = "Administrator",
-            Department = "IT",
-            CreatedAt = DateTime.UtcNow,
-            IsActive = true,
-            EmailConfirmed = true
-        };
-
-        var result = await userManager.CreateAsync(adminUser, "Admin@123456");
-        if (result.Succeeded)
-        {
-            await userManager.AddToRoleAsync(adminUser, "Administrator");
-        }
-    }
-}
+app.Run();

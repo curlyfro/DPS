@@ -4,6 +4,8 @@
 @using DocumentProcessor.Application.Services
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.Extensions.DependencyInjection
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
 @inject IDocumentSourceProvider DocumentSource
 @inject IDocumentRepository DocumentRepository
 @inject IServiceScopeFactory ServiceScopeFactory
@@ -11,6 +13,7 @@
 @inject ILogger<DocumentUpload> Logger
 @inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthenticationStateProvider
 @rendermode InteractiveServer
 
 <PageTitle>Upload Documents</PageTitle>
@@ -219,7 +222,10 @@
     {
         try
         {
-            var documents = await DocumentRepository.GetAllAsync();
+            // Use a separate scope to avoid entity tracking conflicts
+            using var scope = ServiceScopeFactory.CreateScope();
+            var documentRepo = scope.ServiceProvider.GetRequiredService<IDocumentRepository>();
+            var documents = await documentRepo.GetAllAsync();
             _recentDocuments = documents
                 .OrderByDescending(d => d.CreatedAt)
                 .Take(5)
@@ -280,6 +286,10 @@
         _uploadProgress.Clear();
         _messages.Clear();
 
+        // Get the current authenticated user
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var userId = authState.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+
         foreach (var file in _selectedFiles)
         {
             var progress = new UploadProgress { FileName = file.Name };
@@ -287,6 +297,8 @@
             
             try
             {
+                Logger.LogInformation("Starting upload for file: {FileName}, User: {UserId}", file.Name, userId);
+                
                 // Create document entity
                 var document = new Document
                 {
@@ -299,6 +311,7 @@
                     Status = DocumentStatus.Pending,
                     Source = DocumentProcessor.Core.Entities.DocumentSource.LocalUpload,  // Set source (use fully qualified name)
                     UploadedAt = DateTime.UtcNow,  // Set UploadedAt
+                    UploadedBy = userId,  // Set the authenticated user ID
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
@@ -308,11 +321,25 @@
                 var storagePath = await DocumentSource.SaveDocumentAsync(stream, file.Name);
                 document.StoragePath = storagePath;
                 
+                Logger.LogInformation("File uploaded to storage: {StoragePath}", storagePath);
                 progress.Progress = 50;
                 StateHasChanged();
 
-                // Save document to database
-                await DocumentRepository.AddAsync(document);
+                // Save document to database using a separate scope to avoid tracking conflicts
+                Logger.LogInformation("Saving document to database: {DocumentId}", document.Id);
+                Document savedDocument;
+                try
+                {
+                    using var scope = ServiceScopeFactory.CreateScope();
+                    var documentRepo = scope.ServiceProvider.GetRequiredService<IDocumentRepository>();
+                    savedDocument = await documentRepo.AddAsync(document);
+                    Logger.LogInformation("Document saved successfully: {DocumentId}", savedDocument.Id);
+                }
+                catch (Exception saveEx)
+                {
+                    Logger.LogError(saveEx, "Failed to save document to database: {DocumentId}", document.Id);
+                    throw; // Re-throw to be caught by the outer try-catch
+                }
                 
                 progress.Progress = 75;
                 StateHasChanged();
@@ -320,23 +347,22 @@
                 // Queue document for AI processing using the database queue
                 try
                 {
-                    var docId = document.Id;
-                    var docFileName = document.FileName;
+                    var docId = savedDocument.Id;
+                    var docFileName = savedDocument.FileName;
                     
-                    Logger.LogInformation($"Attempting to queue document {docId} ({docFileName}) for processing in database queue");
+                    Logger.LogInformation("Attempting to queue document {DocumentId} ({FileName}) for processing in database queue", docId, docFileName);
                     
                     // Queue the document using IDocumentProcessingService which will add it to the database queue
                     var queueId = await DocumentProcessingService.QueueDocumentForProcessingAsync(docId, DocumentProcessor.Core.Interfaces.ProcessingPriority.Normal);
                     
-                    Logger.LogInformation($"Document {docId} successfully queued with queue ID {queueId}");
+                    Logger.LogInformation("Document {DocumentId} successfully queued with queue ID {QueueId}", docId, queueId);
                     
                     AddMessage($"'{file.Name}' uploaded and queued for AI processing. Check the Documents page to see processing status.", "success");
-                    Logger.LogInformation($"Document {document.Id} ({file.Name}) successfully queued for processing with queue ID: {queueId}");
                 }
                 catch (Exception queueEx)
                 {
-                    Logger.LogError(queueEx, "Failed to queue document for processing");
-                    AddMessage($"'{file.Name}' uploaded successfully. Processing will begin shortly.", "info");
+                    Logger.LogError(queueEx, "Failed to queue document {DocumentId} for processing", savedDocument.Id);
+                    AddMessage($"'{file.Name}' uploaded successfully but could not be queued for processing: {queueEx.Message}", "warning");
                 }
                 
                 progress.Progress = 100;

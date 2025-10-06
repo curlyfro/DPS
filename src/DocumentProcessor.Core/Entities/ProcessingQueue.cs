@@ -30,7 +30,6 @@ namespace DocumentProcessor.Core.Entities
         IntentDetection,
         EntityExtraction,
         Summarization,
-        Translation,
         CustomProcessing
     }
 

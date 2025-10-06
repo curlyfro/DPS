@@ -3,6 +3,7 @@
 @using DocumentProcessor.Core.Interfaces
 @using DocumentProcessor.Core.Entities
 @using DocumentProcessor.Infrastructure.Repositories
+@using System.Text.Json
 @inject IDocumentMetadataRepository MetadataRepository
 @inject IDocumentRepository DocumentRepository
 @inject ILogger<DocumentMetadata> Logger
@@ -133,10 +134,13 @@
                         </button>
                     </div>
                     <div class="card-body">
-                        @if (_metadata.Tags != null && _metadata.Tags.Any())
+                        @{
+                            var tagsDict = GetTagsDictionary(_metadata.Tags);
+                        }
+                        @if (tagsDict != null && tagsDict.Any())
                         {
                             <div class="row">
-                                @foreach (var tag in _metadata.Tags)
+                                @foreach (var tag in tagsDict)
                                 {
                                     <div class="col-md-6 mb-2">
                                         <div class="input-group">
@@ -364,7 +368,7 @@
                         Id = Guid.NewGuid(),
                         DocumentId = DocumentId.Value,
                         Title = _document.FileName,
-                        Tags = new Dictionary<string, string>(), // Initialize empty tags dictionary
+                        Tags = JsonSerializer.Serialize(new Dictionary<string, string>()), // Initialize empty tags JSON
                         CreatedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow
                     };
@@ -434,9 +438,9 @@
             try
             {
                 // Ensure Tags is initialized
-                if (_metadata.Tags == null)
+                if (string.IsNullOrEmpty(_metadata.Tags))
                 {
-                    _metadata.Tags = new Dictionary<string, string>();
+                    _metadata.Tags = JsonSerializer.Serialize(new Dictionary<string, string>());
                 }
                 
                 // Check if metadata exists in database
@@ -484,14 +488,14 @@
     {
         if (!string.IsNullOrWhiteSpace(_newTagKey) && !string.IsNullOrWhiteSpace(_newTagValue) && _metadata != null)
         {
-            // Ensure Tags dictionary is initialized
-            if (_metadata.Tags == null)
-            {
-                _metadata.Tags = new Dictionary<string, string>();
-            }
+            // Get current tags or create new dictionary
+            var tags = GetTagsDictionary(_metadata.Tags) ?? new Dictionary<string, string>();
             
-            // Add tag to metadata
-            _metadata.Tags[_newTagKey] = _newTagValue;
+            // Add tag to dictionary
+            tags[_newTagKey] = _newTagValue;
+            
+            // Serialize back to JSON
+            _metadata.Tags = JsonSerializer.Serialize(tags);
             
             // Save to database
             await MetadataRepository.AddTagAsync(_metadata.Id, _newTagKey, _newTagValue);
@@ -508,8 +512,13 @@
     {
         if (_metadata != null)
         {
-            // Remove tag from metadata
-            _metadata.Tags?.Remove(key);
+            // Get current tags dictionary
+            var tags = GetTagsDictionary(_metadata.Tags);
+            if (tags != null && tags.ContainsKey(key))
+            {
+                tags.Remove(key);
+                _metadata.Tags = JsonSerializer.Serialize(tags);
+            }
             
             // Save to database
             await MetadataRepository.RemoveTagAsync(_metadata.Id, key);
@@ -557,5 +566,20 @@
             DocumentStatus.Failed => "danger",
             _ => "secondary"
         };
+    }
+
+    private Dictionary<string, string>? GetTagsDictionary(string? tagsJson)
+    {
+        if (string.IsNullOrEmpty(tagsJson))
+            return new Dictionary<string, string>();
+        
+        try
+        {
+            return JsonSerializer.Deserialize<Dictionary<string, string>>(tagsJson);
+        }
+        catch (JsonException)
+        {
+            return new Dictionary<string, string>();
+        }
     }
 }

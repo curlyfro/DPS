@@ -31,11 +31,11 @@ namespace DocumentProcessor.Web.Services
             try
             {
                 await DocumentProcessingHub.Notifications.SendDocumentStatusUpdate(_hubContext, documentId, status, message);
-                _logger.LogInformation($"Sent status update for document {documentId}: {status}");
+                _logger.LogInformation("Sent status update for document {DocumentId}: {Status}", documentId, status);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Failed to send status update for document {documentId}");
+                _logger.LogError(ex, "Failed to send status update for document {DocumentId}", documentId);
             }
         }
 
@@ -44,11 +44,11 @@ namespace DocumentProcessor.Web.Services
             try
             {
                 await DocumentProcessingHub.Notifications.SendProcessingProgress(_hubContext, documentId, percentage, currentStep);
-                _logger.LogDebug($"Sent progress update for document {documentId}: {percentage}% - {currentStep}");
+                _logger.LogDebug("Sent progress update for document {DocumentId}: {Percentage}% - {CurrentStep}", documentId, percentage, currentStep);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Failed to send progress update for document {documentId}");
+                _logger.LogError(ex, "Failed to send progress update for document {DocumentId}", documentId);
             }
         }
 
@@ -57,11 +57,11 @@ namespace DocumentProcessor.Web.Services
             try
             {
                 await DocumentProcessingHub.Notifications.SendProcessingComplete(_hubContext, documentId, success, summary);
-                _logger.LogInformation($"Sent completion notification for document {documentId}: Success={success}");
+                _logger.LogInformation("Sent completion notification for document {DocumentId}: Success={Success}", documentId, success);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Failed to send completion notification for document {documentId}");
+                _logger.LogError(ex, "Failed to send completion notification for document {DocumentId}", documentId);
             }
         }
 
@@ -70,7 +70,7 @@ namespace DocumentProcessor.Web.Services
             try
             {
                 await DocumentProcessingHub.Notifications.SendSystemNotification(_hubContext, type, message, severity);
-                _logger.LogInformation($"Sent system notification: {type} - {message} (Severity: {severity})");
+                _logger.LogInformation("Sent system notification: {Type} - {Message} (Severity: {Severity})", type, message, severity);
             }
             catch (Exception ex)
             {
@@ -83,7 +83,7 @@ namespace DocumentProcessor.Web.Services
             try
             {
                 await DocumentProcessingHub.Notifications.SendQueueUpdate(_hubContext, queueLength, processingCount);
-                _logger.LogDebug($"Sent queue update: Length={queueLength}, Processing={processingCount}");
+                _logger.LogDebug("Sent queue update: Length={QueueLength}, Processing={ProcessingCount}", queueLength, processingCount);
             }
             catch (Exception ex)
             {

@@ -45,7 +45,7 @@ namespace DocumentProcessor.Infrastructure.AI
 
             var result = await repository.AddAsync(queueItem);
             
-            _logger.LogInformation($"Document {documentId} enqueued with ID {result.Id} and priority {priority}");
+            _logger.LogInformation("Document {DocumentId} enqueued with ID {QueueId} and priority {Priority}", documentId, result.Id, priority);
             return result.Id;
         }
 
@@ -89,11 +89,11 @@ namespace DocumentProcessor.Infrastructure.AI
                     item.CompletedAt = DateTime.UtcNow;
                     item.UpdatedAt = DateTime.UtcNow;
                     await repository.UpdateAsync(item);
-                    _logger.LogInformation($"Processing cancelled for queue item {queueId}");
+                    _logger.LogInformation("Processing cancelled for queue item {QueueId}", queueId);
                 }
                 else
                 {
-                    _logger.LogWarning($"Cannot cancel queue item {queueId} in state {item.Status}");
+                    _logger.LogWarning("Cannot cancel queue item {QueueId} in state {Status}", queueId, item.Status);
                 }
             }
         }
@@ -133,7 +133,7 @@ namespace DocumentProcessor.Infrastructure.AI
                 
                 if (started)
                 {
-                    _logger.LogInformation($"Dequeued item {item.Id} for processing");
+                    _logger.LogInformation("Dequeued item {QueueId} for processing", item.Id);
                     return new ProcessingQueueItem
                     {
                         QueueId = item.Id,
@@ -188,7 +188,7 @@ namespace DocumentProcessor.Infrastructure.AI
                 item.UpdatedAt = DateTime.UtcNow;
                 await repository.UpdateAsync(item);
                 
-                _logger.LogInformation($"Updated status for queue item {queueId} to {newState}");
+                _logger.LogInformation("Updated status for queue item {QueueId} to {NewState}", queueId, newState);
             }
         }
 
@@ -220,6 +220,49 @@ namespace DocumentProcessor.Infrastructure.AI
                 ProcessingState.Retrying => ProcessingStatus.Retrying,
                 _ => ProcessingStatus.Pending
             };
+        }
+
+        /// <summary>
+        /// Cleans up stuck processing queue items that have been in progress for too long
+        /// </summary>
+        public async Task CleanupStuckDocumentsAsync(TimeSpan maxProcessingTime)
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var repository = scope.ServiceProvider.GetRequiredService<IProcessingQueueRepository>();
+            
+            var cutoffTime = DateTime.UtcNow.Subtract(maxProcessingTime);
+            
+            var stuckItems = await repository.GetStuckItemsAsync((int)maxProcessingTime.TotalMinutes);
+            
+            foreach (var item in stuckItems)
+            {
+                _logger.LogWarning("Cleaning up stuck processing item {QueueId} for document {DocumentId} that has been processing since {StartTime}", 
+                    item.Id, item.DocumentId, item.StartedAt);
+                
+                item.Status = ProcessingStatus.Failed;
+                item.ErrorMessage = $"Processing timeout - exceeded maximum processing time of {maxProcessingTime.TotalMinutes} minutes";
+                item.CompletedAt = DateTime.UtcNow;
+                item.UpdatedAt = DateTime.UtcNow;
+                
+                await repository.UpdateAsync(item);
+                
+                // Also update the document status to failed
+                using var docScope = _serviceProvider.CreateScope();
+                var docRepository = docScope.ServiceProvider.GetRequiredService<IDocumentRepository>();
+                var document = await docRepository.GetByIdAsync(item.DocumentId);
+                if (document != null)
+                {
+                    document.Status = DocumentStatus.Failed;
+                    document.ProcessedAt = DateTime.UtcNow;
+                    document.UpdatedAt = DateTime.UtcNow;
+                    await docRepository.UpdateAsync(document);
+                }
+            }
+            
+            if (stuckItems.Any())
+            {
+                _logger.LogInformation("Cleaned up {Count} stuck processing items", stuckItems.Count());
+            }
         }
     }
 }

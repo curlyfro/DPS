@@ -20,8 +20,9 @@ public static class InfrastructureServiceCollectionExtensions
         IConfiguration configuration)
     {
         // Add Entity Framework
-        services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+        // To switch to Local SQL Server, comment out the line below and uncomment the next line
+        services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+        //services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(configuration.GetConnectionString("LocalSqlServer")));
 
         // Register repositories
         services.AddScoped<IDocumentRepository, DocumentRepository>();
@@ -67,7 +68,6 @@ public static class InfrastructureServiceCollectionExtensions
         {
             bedrockSection.Bind(options);
         });
-        //services.AddSingleton<IAIProcessor>();
             
         // Register background task services
         var usePriorityQueue = configuration.GetValue<bool>("BackgroundTasks:UsePriorityQueue", true);
@@ -97,7 +97,7 @@ public static class InfrastructureServiceCollectionExtensions
         {
             var logger = provider.GetRequiredService<ILogger<DocumentProcessingHostedService>>();
             var queue = provider.GetRequiredService<IBackgroundTaskQueue>();
-            logger.LogInformation($"Creating DocumentProcessingHostedService with max concurrency: {maxConcurrency}");
+            logger.LogInformation("Creating DocumentProcessingHostedService with max concurrency: {MaxConcurrency}", maxConcurrency);
             return new DocumentProcessingHostedService(queue, logger, maxConcurrency);
         });
             

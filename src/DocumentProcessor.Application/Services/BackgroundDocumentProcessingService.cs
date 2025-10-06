@@ -117,4 +117,47 @@ public class BackgroundDocumentProcessingService(
     {
         return Task.FromResult(taskQueue.Count);
     }
+
+    public async Task CleanupStuckDocumentsAsync(int timeoutMinutes = 30)
+    {
+        using var scope = serviceScopeFactory.CreateScope();
+        
+        try
+        {
+            logger.LogInformation("Starting cleanup of stuck documents (timeout: {TimeoutMinutes} minutes)", timeoutMinutes);
+            
+            var processingQueue = scope.ServiceProvider.GetRequiredService<IAIProcessingQueue>();
+            if (processingQueue is DocumentProcessor.Infrastructure.AI.DatabaseProcessingQueue dbQueue)
+            {
+                await dbQueue.CleanupStuckDocumentsAsync(TimeSpan.FromMinutes(timeoutMinutes));
+            }
+            
+            var documentRepository = scope.ServiceProvider.GetRequiredService<IDocumentRepository>();
+            var cutoffTime = DateTime.UtcNow.AddMinutes(-timeoutMinutes);
+            
+            // Find documents that are still in processing status but have been there too long
+            var stuckDocuments = await documentRepository.GetByStatusAsync(DocumentStatus.Processing);
+            var actuallyStuck = stuckDocuments.Where(d => d.UpdatedAt < cutoffTime).ToList();
+            
+            foreach (var document in actuallyStuck)
+            {
+                logger.LogWarning("Marking stuck document {DocumentId} ({FileName}) as failed - stuck since {UpdatedAt}", 
+                    document.Id, document.FileName, document.UpdatedAt);
+                
+                document.Status = DocumentStatus.Failed;
+                document.ProcessedAt = DateTime.UtcNow;
+                document.UpdatedAt = DateTime.UtcNow;
+                await documentRepository.UpdateAsync(document);
+            }
+            
+            if (actuallyStuck.Any())
+            {
+                logger.LogInformation("Cleaned up {Count} stuck documents", actuallyStuck.Count);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error during stuck document cleanup");
+        }
+    }
 }

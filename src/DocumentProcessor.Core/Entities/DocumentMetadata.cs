@@ -18,7 +18,7 @@ namespace DocumentProcessor.Core.Entities
         public int? WordCount { get; set; }
         public string? Language { get; set; }
         public string? CustomMetadata { get; set; } // JSON for additional metadata
-        public Dictionary<string, string> Tags { get; set; } = new Dictionary<string, string>();
+        public string? Tags { get; set; } // JSON string for EF Core 8 compatibility
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
     }

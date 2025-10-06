@@ -438,14 +438,17 @@ else
                     </div>
                 }
 
-                @if (documentMetadata?.Tags != null && documentMetadata.Tags.Any())
+                @{
+                    var tagsDict = GetTagsDictionary(documentMetadata?.Tags);
+                }
+                @if (tagsDict != null && tagsDict.Any())
                 {
                     <div class="card">
                         <div class="card-header">
                             <h5>Custom Tags</h5>
                         </div>
                         <div class="card-body">
-                            @foreach (var tag in documentMetadata.Tags)
+                            @foreach (var tag in tagsDict)
                             {
                                 <div class="mb-2">
                                     <small class="text-muted d-block">@tag.Key</small>
@@ -1125,5 +1128,20 @@ else
     private void HandlePreviewLoad()
     {
         Logger.LogInformation($"Successfully loaded preview for document: {document?.OriginalFileName}");
+    }
+
+    private Dictionary<string, string>? GetTagsDictionary(string? tagsJson)
+    {
+        if (string.IsNullOrEmpty(tagsJson))
+            return new Dictionary<string, string>();
+        
+        try
+        {
+            return JsonSerializer.Deserialize<Dictionary<string, string>>(tagsJson);
+        }
+        catch (JsonException)
+        {
+            return new Dictionary<string, string>();
+        }
     }
 }

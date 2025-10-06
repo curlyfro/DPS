@@ -158,6 +158,9 @@ namespace DocumentProcessor.Infrastructure.Repositories
         Task<bool> StartProcessingAsync(Guid id, string processorId);
         Task<bool> CompleteProcessingAsync(Guid id, string? resultData = null);
         Task<bool> FailProcessingAsync(Guid id, string errorMessage, string? errorDetails = null);
+        Task<IEnumerable<ProcessingQueue>> GetStuckItemsAsync(int minutesThreshold = 30);
+        Task<Dictionary<ProcessingStatus, int>> GetStatusCountsAsync();
+        Task<Dictionary<ProcessingType, int>> GetProcessingTypeCountsAsync();
     }
 
     public interface IDocumentMetadataRepository

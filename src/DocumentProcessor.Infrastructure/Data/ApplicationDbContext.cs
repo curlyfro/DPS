@@ -117,11 +117,8 @@ namespace DocumentProcessor.Infrastructure.Data
                 entity.Property(e => e.Keywords).HasMaxLength(2000);
                 entity.Property(e => e.Language).HasMaxLength(10);
                 
-                // Configure Tags as JSON column (EF Core 9.0+)
-                entity.OwnsOne(e => e.Tags, builder =>
-                {
-                    builder.ToJson();
-                });
+                // Configure Tags as a simple string property (EF Core 8 compatible)
+                // Convert Dictionary to/from JSON manually in the application layer if needed
                 
                 entity.HasIndex(e => e.DocumentId).IsUnique();
             });
