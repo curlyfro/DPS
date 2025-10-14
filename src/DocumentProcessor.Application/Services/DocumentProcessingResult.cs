@@ -10,7 +10,5 @@ public class DocumentProcessingResult
     public DateTime StartedAt { get; set; }
     public DateTime CompletedAt { get; set; }
     public DocumentClassificationResult? Classification { get; set; }
-    public DocumentExtractionResult? Extraction { get; set; }
     public DocumentSummaryResult? Summary { get; set; }
-    public DocumentIntentResult? Intent { get; set; }
 }

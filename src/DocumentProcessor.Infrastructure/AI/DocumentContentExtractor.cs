@@ -16,7 +16,9 @@ namespace DocumentProcessor.Infrastructure.AI;
 /// <summary>
 /// Extracts content from various document types for AI processing
 /// </summary>
-public class DocumentContentExtractor(ILogger<DocumentContentExtractor> logger, IServiceProvider serviceProvider = null)
+#pragma warning disable CS9113
+public class DocumentContentExtractor(ILogger<DocumentContentExtractor> logger, IServiceProvider? serviceProvider = null)
+#pragma warning restore CS9113
 {
     private const int MaxContentLength = 50000; // Character limit for AI processing
 
@@ -334,63 +336,12 @@ public class DocumentContentExtractor(ILogger<DocumentContentExtractor> logger, 
                 audioStream.Position = 0;
             }
 
-            // Try to transcribe using Amazon Transcribe
-            if (serviceProvider != null)
-            {
-                var transcribeService = serviceProvider.GetService<AmazonTranscribeService>();
-                if (transcribeService != null)
-                {
-                    logger.LogInformation("Starting Amazon Transcribe for document {DocumentId}", document.Id);
-                    
-                    try
-                    {
-                        var transcript = await transcribeService.TranscribeAudioAsync(document, audioStream);
-                        
-                        if (!string.IsNullOrWhiteSpace(transcript))
-                        {
-                            content.Text = $"[Audio Transcription - MP3 File: {document.FileName}]\n\n";
-                            
-                            // Add metadata if available
-                            if (content.Metadata["duration"] != "Unknown")
-                            {
-                                content.Text += $"Duration: {content.Metadata["duration"]}\n";
-                            }
-                            if (content.Metadata["bitrate"] != "Unknown")
-                            {
-                                try
-                                {
-                                    content.Text += $"Bitrate: {int.Parse(content.Metadata["bitrate"]) / 1000} kbps\n";
-                                }
-                                catch
-                                {
-                                    content.Text += $"Bitrate: {content.Metadata["bitrate"]}\n";
-                                }
-                            }
-                            if (content.Metadata["sampleRate"] != "Unknown")
-                            {
-                                content.Text += $"Sample Rate: {content.Metadata["sampleRate"]} Hz\n";
-                            }
-                            if (content.Metadata["channels"] != "Unknown")
-                            {
-                                content.Text += $"Channels: {(content.Metadata["channels"] == "2" ? "Stereo" : content.Metadata["channels"] == "1" ? "Mono" : content.Metadata["channels"])}\n";
-                            }
-                            
-                            content.Text += "\n--- Transcribed Content ---\n\n";
-                            content.Text += transcript;
-                            
-                            content.Metadata["transcriptionAvailable"] = "true";
-                            content.Metadata["transcriptionService"] = "amazon_transcribe";
-                            
-                            logger.LogInformation("Successfully transcribed MP3 file {FileName}", document.FileName);
-                            return content;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogError(ex, "Failed to transcribe MP3 file {FileName}", document.FileName);
-                    }
-                }
-            }
+            // Transcription service removed - would be implemented here if available
+            // if (serviceProvider != null)
+            // {
+            //     var transcribeService = serviceProvider.GetService<AmazonTranscribeService>();
+            //     // ... transcription logic
+            // }
 
             // Fallback if transcription fails or is not available
             description.AppendLine($"Audio File: {document.FileName}");
@@ -495,39 +446,11 @@ public class DocumentContentExtractor(ILogger<DocumentContentExtractor> logger, 
                 }
             });
 
-            // Now perform transcription if this is part of a document processing context
-            // Check if we have access to the document entity and transcription service
-            if (serviceProvider != null && extension == ".mp3")
-            {
-                var transcribeService = serviceProvider.GetService<AmazonTranscribeService>();
-                if (transcribeService != null)
-                {
-                    description.AppendLine("\n[Audio Transcription - Amazon Transcribe]");
-                    
-                    // Note: This method is being called from ExtractContentAsync which passes a Document
-                    // For transcription, we would need the Document entity. This is a simplified approach
-                    // In production, you'd pass the Document entity to this method
-                    description.AppendLine("Amazon Transcribe service is configured and available.");
-                    description.AppendLine("Transcription will be performed during document processing.");
-                    
-                    content.Metadata["transcriptionAvailable"] = "true";
-                    content.Metadata["transcriptionService"] = "amazon_transcribe";
-                }
-                else
-                {
-                    description.AppendLine("\n[Audio Transcription]");
-                    description.AppendLine("Amazon Transcribe service not configured.");
-                    content.Metadata["transcriptionAvailable"] = "false";
-                    content.Metadata["transcriptionService"] = "not_configured";
-                }
-            }
-            else
-            {
-                description.AppendLine("\n[Audio Transcription]");
-                description.AppendLine("Transcription service not available for this file type.");
-                content.Metadata["transcriptionAvailable"] = "false";
-                content.Metadata["transcriptionService"] = "not_available";
-            }
+            // Transcription service removed - would be implemented here if available
+            description.AppendLine("\n[Audio Transcription]");
+            description.AppendLine("Transcription service not available.");
+            content.Metadata["transcriptionAvailable"] = "false";
+            content.Metadata["transcriptionService"] = "not_available";
         }
         catch (Exception ex)
         {

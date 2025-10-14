@@ -15,9 +15,9 @@ namespace DocumentProcessor.Core.Interfaces
             CancellationToken cancellationToken);
 
         int Count { get; }
-        
+
         bool TryGetStatus(string itemId, out BackgroundTaskStatus status);
-        
+
         void UpdateStatus(string itemId, BackgroundTaskStatus status);
     }
 
@@ -28,16 +28,5 @@ namespace DocumentProcessor.Core.Interfaces
         Completed,
         Failed,
         Cancelled
-    }
-
-    public interface IBackgroundTaskItem
-    {
-        string Id { get; }
-        int Priority { get; }
-        DateTime QueuedAt { get; }
-        BackgroundTaskStatus Status { get; set; }
-        string? ErrorMessage { get; set; }
-        int RetryCount { get; set; }
-        int MaxRetries { get; }
     }
 }

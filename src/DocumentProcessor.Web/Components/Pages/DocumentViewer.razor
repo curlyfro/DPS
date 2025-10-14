@@ -229,6 +229,7 @@ else
                                     </div>
                                 }
 
+                                @* Commented out - Intent feature not implemented
                                 @if (processingResult.Intent != null)
                                 {
                                     <div class="card mb-3 border-warning">
@@ -263,7 +264,9 @@ else
                                         </div>
                                     </div>
                                 }
+                                *@
 
+                                @* Commented out - Extraction feature not implemented
                                 @if (processingResult.Extraction != null && processingResult.Extraction.Entities.Any())
                                 {
                                     <div class="card mb-3">
@@ -317,6 +320,7 @@ else
                                         </div>
                                     </div>
                                 }
+                                *@
 
                                 @if (processingResult.Summary != null && processingResult.Summary.KeyPoints.Any())
                                 {
@@ -749,45 +753,49 @@ else
             // Load document metadata including tags
             documentMetadata = await MetadataRepository.GetByDocumentIdAsync(DocumentId);
 
-            // Load stored intent data from the Classification table if document is processed
+            // Load stored classification data if document is processed
             if (document.Status == DocumentStatus.Processed && document.Classifications?.Any() == true)
             {
                 var classification = document.Classifications.FirstOrDefault();
-                if (classification != null && !string.IsNullOrEmpty(classification.ExtractedIntents))
+                if (classification != null)
                 {
                     try
                     {
+                        // Create a processing result to display the stored data
+                        processingResult = new DocumentProcessingResult
+                        {
+                            DocumentId = document.Id,
+                            Success = true
+                            // Intent and Extraction features not implemented - properties removed
+                        };
+
+                        // Deserialize classification data if available
+                        if (!string.IsNullOrEmpty(classification.AIResponse))
+                        {
+                            processingResult.Classification = JsonSerializer.Deserialize<DocumentClassificationResult>(classification.AIResponse);
+                        }
+
+                        /* Commented out - Intent and Extraction features not implemented
                         // Try to deserialize the stored intent data
                         var storedIntent = JsonSerializer.Deserialize<DocumentIntentResult>(classification.ExtractedIntents);
                         if (storedIntent != null)
                         {
-                            // Create a processing result to display the stored data
-                            processingResult = new DocumentProcessingResult
-                            {
-                                DocumentId = document.Id,
-                                Success = true,
-                                Intent = storedIntent
-                            };
+                            processingResult.Intent = storedIntent;
+                        }
 
-                            // Also deserialize classification data if available
-                            if (!string.IsNullOrEmpty(classification.AIResponse))
+                        // Deserialize entities if available
+                        if (!string.IsNullOrEmpty(classification.ExtractedEntities))
+                        {
+                            var entities = JsonSerializer.Deserialize<List<ExtractedEntity>>(classification.ExtractedEntities);
+                            if (entities != null)
                             {
-                                processingResult.Classification = JsonSerializer.Deserialize<DocumentClassificationResult>(classification.AIResponse);
-                            }
-
-                            // Deserialize entities if available
-                            if (!string.IsNullOrEmpty(classification.ExtractedEntities))
-                            {
-                                var entities = JsonSerializer.Deserialize<List<ExtractedEntity>>(classification.ExtractedEntities);
-                                if (entities != null)
+                                processingResult.Extraction = new DocumentExtractionResult
                                 {
-                                    processingResult.Extraction = new DocumentExtractionResult
-                                    {
-                                        Entities = entities
-                                    };
-                                }
+                                    Entities = entities
+                                };
                             }
                         }
+                        */
                     }
                     catch (JsonException ex)
                     {
@@ -893,8 +901,7 @@ else
                     ProcessingResults = new
                     {
                         processingResult?.Classification,
-                        processingResult?.Intent,
-                        processingResult?.Extraction,
+                        // Intent and Extraction properties removed - features not implemented
                         processingResult?.Summary
                     },
                     Metadata = documentMetadata?.Tags,
@@ -929,7 +936,7 @@ else
         }
     }
 
-    private async Task DeleteDocument()
+    private void DeleteDocument()
     {
         showDeleteConfirmation = true;
     }

@@ -4,8 +4,6 @@
 @using DocumentProcessor.Application.Services
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.Extensions.DependencyInjection
-@using Microsoft.AspNetCore.Components.Authorization
-@using System.Security.Claims
 @inject IDocumentSourceProvider DocumentSource
 @inject IDocumentRepository DocumentRepository
 @inject IServiceScopeFactory ServiceScopeFactory
@@ -13,7 +11,6 @@
 @inject ILogger<DocumentUpload> Logger
 @inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
-@inject AuthenticationStateProvider AuthenticationStateProvider
 @rendermode InteractiveServer
 
 <PageTitle>Upload Documents</PageTitle>
@@ -286,9 +283,7 @@
         _uploadProgress.Clear();
         _messages.Clear();
 
-        // Get the current authenticated user
-        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        var userId = authState.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var userId = "System";
 
         foreach (var file in _selectedFiles)
         {
@@ -353,7 +348,7 @@
                     Logger.LogInformation("Attempting to queue document {DocumentId} ({FileName}) for processing in database queue", docId, docFileName);
                     
                     // Queue the document using IDocumentProcessingService which will add it to the database queue
-                    var queueId = await DocumentProcessingService.QueueDocumentForProcessingAsync(docId, DocumentProcessor.Core.Interfaces.ProcessingPriority.Normal);
+                    var queueId = await DocumentProcessingService.QueueDocumentForProcessingAsync(docId);
                     
                     Logger.LogInformation("Document {DocumentId} successfully queued with queue ID {QueueId}", docId, queueId);
                     

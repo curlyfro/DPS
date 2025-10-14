@@ -381,8 +381,9 @@
             {
                 // Load all metadata for list view
                 await LoadAllMetadata();
-                _topAuthors = await MetadataRepository.GetTopAuthorsAsync();
-                _availableLanguages = await MetadataRepository.GetLanguageDistributionAsync();
+                // Commented out - Methods not implemented in repository
+                // _topAuthors = await MetadataRepository.GetTopAuthorsAsync();
+                // _availableLanguages = await MetadataRepository.GetLanguageDistributionAsync();
             }
         }
         catch (Exception ex)

@@ -162,9 +162,13 @@ namespace DocumentProcessor.Infrastructure.Providers
                 {
                     await Task.Run(() => File.Delete(fullPath));
                     _logger.LogInformation("File deleted from network share: {Path}", fullPath);
-                    
+
                     // Try to clean up empty directories
-                    CleanupEmptyDirectories(Path.GetDirectoryName(fullPath));
+                    var directory = Path.GetDirectoryName(fullPath);
+                    if (!string.IsNullOrEmpty(directory))
+                    {
+                        CleanupEmptyDirectories(directory);
+                    }
                     return true;
                 }
 
@@ -370,9 +374,13 @@ namespace DocumentProcessor.Infrastructure.Providers
                 SetFilePermissions(destFullPath);
 
                 _logger.LogInformation("File moved on network share from {Source} to {Dest}", sourceFullPath, destFullPath);
-                
+
                 // Try to clean up empty source directories
-                CleanupEmptyDirectories(Path.GetDirectoryName(sourceFullPath));
+                var sourceDirectory = Path.GetDirectoryName(sourceFullPath);
+                if (!string.IsNullOrEmpty(sourceDirectory))
+                {
+                    CleanupEmptyDirectories(sourceDirectory);
+                }
                 return true;
             }
             catch (UnauthorizedAccessException ex)
@@ -471,11 +479,17 @@ namespace DocumentProcessor.Infrastructure.Providers
 
         private void SetFilePermissions(string filePath)
         {
+            if (!OperatingSystem.IsWindows())
+            {
+                // ACL permissions are Windows-specific
+                return;
+            }
+
             try
             {
                 // Set appropriate permissions for the file
                 var fileSecurity = new FileSecurity(filePath, AccessControlSections.Access);
-                
+
                 // Example: Grant read/write to authenticated users
                 var authenticatedUsers = new SecurityIdentifier(WellKnownSidType.AuthenticatedUserSid, null);
                 fileSecurity.AddAccessRule(new FileSystemAccessRule(
@@ -494,11 +508,17 @@ namespace DocumentProcessor.Infrastructure.Providers
 
         private void SetDirectoryPermissions(string directoryPath)
         {
+            if (!OperatingSystem.IsWindows())
+            {
+                // ACL permissions are Windows-specific
+                return;
+            }
+
             try
             {
                 // Set appropriate permissions for the directory
                 var directorySecurity = new DirectorySecurity(directoryPath, AccessControlSections.Access);
-                
+
                 // Example: Grant read/write to authenticated users
                 var authenticatedUsers = new SecurityIdentifier(WellKnownSidType.AuthenticatedUserSid, null);
                 directorySecurity.AddAccessRule(new FileSystemAccessRule(

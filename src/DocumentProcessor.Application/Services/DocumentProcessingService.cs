@@ -10,18 +10,19 @@ namespace DocumentProcessor.Application.Services;
 
 public class DocumentProcessingService(
     IAIProcessorFactory aiProcessorFactory,
-    IAIProcessingQueue processingQueue,
     IDocumentSourceProvider documentSource,
     IServiceScopeFactory serviceScopeFactory,
+    IBackgroundTaskQueue taskQueue,
     ILogger<DocumentProcessingService> logger)
     : IDocumentProcessingService
 {
-    public async Task<Guid> QueueDocumentForProcessingAsync(Guid documentId, ProcessingPriority priority = ProcessingPriority.Normal)
+    public async Task<Guid> QueueDocumentForProcessingAsync(Guid documentId)
     {
         // Use a separate service scope to avoid tracking conflicts
         using var scope = serviceScopeFactory.CreateScope();
         var documentRepository = scope.ServiceProvider.GetRequiredService<IDocumentRepository>();
-        
+        var processingQueueRepo = scope.ServiceProvider.GetService<IProcessingQueueRepository>();
+
         var document = await documentRepository.GetByIdAsync(documentId);
         if (document == null)
         {
@@ -33,11 +34,58 @@ public class DocumentProcessingService(
         document.UpdatedAt = DateTime.UtcNow;
         await documentRepository.UpdateAsync(document);
 
-        // Add to processing queue
-        var queueId = await processingQueue.EnqueueDocumentAsync(documentId, priority);
-            
-        logger.LogInformation("Document {DocumentId} queued for processing with queue ID {QueueId}", documentId, queueId);
+        // Add to processing queue repository if available
+        Guid queueId = Guid.NewGuid();
+        if (processingQueueRepo != null)
+        {
+            var queueItem = new ProcessingQueue
+            {
+                Id = queueId,
+                DocumentId = documentId,
+                Status = ProcessingStatus.Pending,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            await processingQueueRepo.AddAsync(queueItem);
+        }
+
+        // Also queue to the background task queue so workers can pick it up
+        var taskId = $"doc-{documentId}-{queueId}";
+        await taskQueue.QueueBackgroundWorkItemAsync(
+            async (cancellationToken) =>
+            {
+                await ProcessDocumentInternalAsync(documentId, cancellationToken);
+            },
+            taskId,
+            priority: 0);
+
+        logger.LogInformation("Document {DocumentId} queued for processing with queue ID {QueueId} and task ID {TaskId}", documentId, queueId, taskId);
         return queueId;
+    }
+
+    private async ValueTask ProcessDocumentInternalAsync(Guid documentId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            logger.LogInformation("Starting background processing for document {DocumentId}", documentId);
+
+            // Process the document
+            var result = await ProcessDocumentAsync(documentId);
+
+            if (result.Success)
+            {
+                logger.LogInformation("Successfully processed document {DocumentId}", documentId);
+            }
+            else
+            {
+                logger.LogError("Failed to process document {DocumentId}: {Error}", documentId, result.ErrorMessage);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error processing document {DocumentId} in background", documentId);
+            throw;
+        }
     }
 
     public async Task<DocumentProcessingResult> ProcessDocumentAsync(Guid documentId, AIProviderType? providerType = null)
@@ -76,24 +124,18 @@ public class DocumentProcessingService(
             // Get document content - create separate streams for each AI operation
             // to avoid "Cannot access a closed file" errors
             await using var classificationStream = await documentSource.GetDocumentStreamAsync(document.StoragePath);
-            await using var extractionStream = await documentSource.GetDocumentStreamAsync(document.StoragePath);
             await using var summaryStream = await documentSource.GetDocumentStreamAsync(document.StoragePath);
-            await using var intentStream = await documentSource.GetDocumentStreamAsync(document.StoragePath);
 
             // Process with AI - each operation gets its own stream
             var classificationTask = processor.ClassifyDocumentAsync(document, classificationStream);
-            var extractionTask = processor.ExtractDataAsync(document, extractionStream);
             var summaryTask = processor.GenerateSummaryAsync(document, summaryStream);
-            var intentTask = processor.DetectIntentAsync(document, intentStream);
 
             // Wait for all tasks
-            await Task.WhenAll(classificationTask, extractionTask, summaryTask, intentTask);
+            await Task.WhenAll(classificationTask, summaryTask);
 
             // Get results
             result.Classification = await classificationTask;
-            result.Extraction = await extractionTask;
             result.Summary = await summaryTask;
-            result.Intent = await intentTask;
 
             // Update document with processing results using the same tracked instance
             document.Status = DocumentStatus.Processed;
@@ -104,16 +146,6 @@ public class DocumentProcessingService(
             if (result.Summary != null && !string.IsNullOrEmpty(result.Summary.Summary))
             {
                 document.Summary = result.Summary.Summary;
-            }
-
-            // Store extracted text from extraction results
-            if (result.Extraction != null && result.Extraction.Entities != null && result.Extraction.Entities.Any())
-            {
-                // Combine all extracted entities into a text representation
-                var extractedTexts = result.Extraction.Entities
-                    .Select(e => $"{e.Type}: {e.Value}")
-                    .ToList();
-                document.ExtractedText = string.Join("; ", extractedTexts);
             }
 
             // Handle document type and classification
@@ -147,8 +179,6 @@ public class DocumentProcessingService(
                     Method = ClassificationMethod.AI,
                     AIModelUsed = processor.ModelId,
                     AIResponse = JsonSerializer.Serialize(result.Classification),
-                    ExtractedIntents = result.Intent != null ? JsonSerializer.Serialize(result.Intent) : null,
-                    ExtractedEntities = result.Extraction?.Entities != null ? JsonSerializer.Serialize(result.Extraction.Entities) : null,
                     IsManuallyVerified = false,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
@@ -188,17 +218,6 @@ public class DocumentProcessingService(
                     UpdatedAt = DateTime.UtcNow
                 };
 
-                // Add extracted entities as tags
-                if (result.Extraction?.Entities != null)
-                {
-                    var tags = new Dictionary<string, string>();
-                    foreach (var entity in result.Extraction.Entities.Take(10)) // Limit to 10 entities
-                    {
-                        tags[entity.Type] = entity.Value;
-                    }
-                    metadata.Tags = JsonSerializer.Serialize(tags);
-                }
-
                 await unitOfWork.DocumentMetadata.AddAsync(metadata);
             }
             else
@@ -210,23 +229,6 @@ public class DocumentProcessingService(
                 existingMetadata.Keywords = result.Classification?.Tags != null ? string.Join(", ", result.Classification.Tags) : existingMetadata.Keywords;
                 existingMetadata.Subject = result.Classification?.PrimaryCategory ?? existingMetadata.Subject;
                 existingMetadata.UpdatedAt = DateTime.UtcNow;
-
-                // Update tags with extracted entities
-                if (result.Extraction?.Entities != null)
-                {
-                    // Deserialize existing tags or create new dictionary
-                    var tags = string.IsNullOrEmpty(existingMetadata.Tags)
-                        ? new Dictionary<string, string>()
-                        : JsonSerializer.Deserialize<Dictionary<string, string>>(existingMetadata.Tags) ?? new Dictionary<string, string>();
-                    
-                    foreach (var entity in result.Extraction.Entities.Take(10))
-                    {
-                        tags[entity.Type] = entity.Value;
-                    }
-                    
-                    // Serialize back to JSON string
-                    existingMetadata.Tags = JsonSerializer.Serialize(tags);
-                }
 
                 await unitOfWork.DocumentMetadata.UpdateAsync(existingMetadata);
             }
@@ -261,40 +263,6 @@ public class DocumentProcessingService(
         }
 
         return result;
-    }
-
-    public async Task<ProcessingQueueStatus> GetProcessingStatusAsync(Guid queueId)
-    {
-        return await processingQueue.GetQueueStatusAsync(queueId);
-    }
-
-    public async Task<IEnumerable<ProcessingQueueItem>> GetPendingDocumentsAsync()
-    {
-        return await processingQueue.GetPendingItemsAsync();
-    }
-
-    public async Task CancelProcessingAsync(Guid queueId)
-    {
-        await processingQueue.CancelProcessingAsync(queueId);
-    }
-
-    public async Task<ProcessingCost> EstimateProcessingCostAsync(Guid documentId, AIProviderType? providerType = null)
-    {
-        // Use a separate service scope to avoid tracking conflicts
-        using var scope = serviceScopeFactory.CreateScope();
-        var documentRepository = scope.ServiceProvider.GetRequiredService<IDocumentRepository>();
-        
-        var document = await documentRepository.GetByIdAsync(documentId);
-        if (document == null)
-        {
-            throw new ArgumentException($"Document with ID {documentId} not found");
-        }
-
-        var processor = providerType.HasValue 
-            ? aiProcessorFactory.CreateProcessor(providerType.Value)
-            : aiProcessorFactory.GetDefaultProcessor();
-
-        return await processor.EstimateCostAsync(document.FileSize, document.ContentType);
     }
 
     private async Task UpdateQueueItemsStatusAsync(Guid documentId, bool success, string? errorMessage)

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using DocumentProcessor.Core.Entities;
+using DocumentProcessor.Core.Interfaces;
 using DocumentProcessor.Infrastructure.Data;
 using System.Text.Json;
 
@@ -15,7 +16,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
         {
         }
 
-        public async Task<DocumentMetadata?> GetByIdAsync(Guid id)
+        public override async Task<DocumentMetadata?> GetByIdAsync(Guid id)
         {
             return await _dbSet
                 .Include(m => m.Document)
@@ -29,7 +30,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
                 .FirstOrDefaultAsync(m => m.DocumentId == documentId);
         }
 
-        public async Task<DocumentMetadata> AddAsync(DocumentMetadata metadata)
+        public override async Task<DocumentMetadata> AddAsync(DocumentMetadata metadata)
         {
             if (metadata.Id == Guid.Empty)
                 metadata.Id = Guid.NewGuid();
@@ -42,7 +43,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
             return metadata;
         }
 
-        public async Task<DocumentMetadata> UpdateAsync(DocumentMetadata metadata)
+        public new async Task<DocumentMetadata> UpdateAsync(DocumentMetadata metadata)
         {
             metadata.UpdatedAt = DateTime.UtcNow;
             
@@ -71,7 +72,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
             }
         }
 
-        public async Task<IEnumerable<DocumentMetadata>> GetAllAsync()
+        public override async Task<IEnumerable<DocumentMetadata>> GetAllAsync()
         {
             return await _dbSet
                 .Include(m => m.Document)
@@ -118,17 +119,6 @@ namespace DocumentProcessor.Infrastructure.Repositories
                 .Include(m => m.Document)
                 .Where(m => m.Language == language)
                 .OrderByDescending(m => m.CreatedAt)
-                .ToListAsync();
-        }
-
-        public async Task<IEnumerable<DocumentMetadata>> GetByDateRangeAsync(DateTime startDate, DateTime endDate)
-        {
-            return await _dbSet
-                .Include(m => m.Document)
-                .Where(m => m.CreationDate != null && 
-                           m.CreationDate >= startDate && 
-                           m.CreationDate <= endDate)
-                .OrderByDescending(m => m.CreationDate)
                 .ToListAsync();
         }
 
@@ -191,26 +181,6 @@ namespace DocumentProcessor.Infrastructure.Repositories
                 }
             }
             return false;
-        }
-
-        public async Task<Dictionary<string, int>> GetTopAuthorsAsync(int limit = 10)
-        {
-            return await _dbSet
-                .Where(m => m.Author != null)
-                .GroupBy(m => m.Author)
-                .Select(g => new { Author = g.Key!, Count = g.Count() })
-                .OrderByDescending(x => x.Count)
-                .Take(limit)
-                .ToDictionaryAsync(x => x.Author, x => x.Count);
-        }
-
-        public async Task<Dictionary<string, int>> GetLanguageDistributionAsync()
-        {
-            return await _dbSet
-                .Where(m => m.Language != null)
-                .GroupBy(m => m.Language)
-                .Select(g => new { Language = g.Key!, Count = g.Count() })
-                .ToDictionaryAsync(x => x.Language, x => x.Count);
         }
     }
 }

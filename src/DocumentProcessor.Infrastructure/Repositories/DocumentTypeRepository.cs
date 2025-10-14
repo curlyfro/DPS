@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using DocumentProcessor.Core.Entities;
+using DocumentProcessor.Core.Interfaces;
 using DocumentProcessor.Infrastructure.Data;
 
 namespace DocumentProcessor.Infrastructure.Repositories
@@ -14,7 +15,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
         {
         }
 
-        public async Task<DocumentType?> GetByIdAsync(Guid id)
+        public override async Task<DocumentType?> GetByIdAsync(Guid id)
         {
             return await _dbSet
                 .Include(dt => dt.Documents)
@@ -45,7 +46,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
                 .ToListAsync();
         }
 
-        public async Task<DocumentType> AddAsync(DocumentType documentType)
+        public override async Task<DocumentType> AddAsync(DocumentType documentType)
         {
             if (documentType.Id == Guid.Empty)
                 documentType.Id = Guid.NewGuid();
@@ -58,7 +59,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
             return documentType;
         }
 
-        public async Task<DocumentType> UpdateAsync(DocumentType documentType)
+        public new async Task<DocumentType> UpdateAsync(DocumentType documentType)
         {
             documentType.UpdatedAt = DateTime.UtcNow;
             _dbSet.Update(documentType);
@@ -79,25 +80,6 @@ namespace DocumentProcessor.Infrastructure.Repositories
         public async Task<bool> ExistsAsync(Guid id)
         {
             return await _dbSet.AnyAsync(dt => dt.Id == id);
-        }
-
-        public async Task<bool> NameExistsAsync(string name, Guid? excludeId = null)
-        {
-            var query = _dbSet.Where(dt => dt.Name.ToLower() == name.ToLower());
-            if (excludeId.HasValue)
-            {
-                query = query.Where(dt => dt.Id != excludeId.Value);
-            }
-            return await query.AnyAsync();
-        }
-
-        public async Task<IEnumerable<DocumentType>> GetByCategoryAsync(string category)
-        {
-            return await _dbSet
-                .Where(dt => dt.Category == category && dt.IsActive)
-                .OrderBy(dt => dt.Priority)
-                .ThenBy(dt => dt.Name)
-                .ToListAsync();
         }
     }
 }

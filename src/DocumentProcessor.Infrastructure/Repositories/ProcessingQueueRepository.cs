@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using DocumentProcessor.Core.Entities;
+using DocumentProcessor.Core.Interfaces;
 using DocumentProcessor.Infrastructure.Data;
 
 namespace DocumentProcessor.Infrastructure.Repositories
@@ -14,7 +15,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
         {
         }
 
-        public async Task<ProcessingQueue?> GetByIdAsync(Guid id)
+        public override async Task<ProcessingQueue?> GetByIdAsync(Guid id)
         {
             return await _dbSet
                 .Include(pq => pq.Document)
@@ -55,7 +56,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
                 .ToListAsync();
         }
 
-        public async Task<ProcessingQueue> AddAsync(ProcessingQueue item)
+        public override async Task<ProcessingQueue> AddAsync(ProcessingQueue item)
         {
             if (item.Id == Guid.Empty)
                 item.Id = Guid.NewGuid();
@@ -69,7 +70,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
             return item;
         }
 
-        public async Task<ProcessingQueue> UpdateAsync(ProcessingQueue item)
+        public new async Task<ProcessingQueue> UpdateAsync(ProcessingQueue item)
         {
             item.UpdatedAt = DateTime.UtcNow;
             _dbSet.Update(item);
@@ -163,27 +164,6 @@ namespace DocumentProcessor.Infrastructure.Repositories
                 .GroupBy(pq => pq.Status)
                 .Select(g => new { Status = g.Key, Count = g.Count() })
                 .ToDictionaryAsync(x => x.Status, x => x.Count);
-        }
-
-        public async Task<Dictionary<ProcessingType, int>> GetProcessingTypeCountsAsync()
-        {
-            return await _dbSet
-                .Where(pq => pq.Status == ProcessingStatus.Pending || pq.Status == ProcessingStatus.InProgress)
-                .GroupBy(pq => pq.ProcessingType)
-                .Select(g => new { Type = g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.Type, x => x.Count);
-        }
-
-        public async Task<IEnumerable<ProcessingQueue>> GetStuckItemsAsync(int minutesThreshold = 30)
-        {
-            var thresholdTime = DateTime.UtcNow.AddMinutes(-minutesThreshold);
-            return await _dbSet
-                .Include(pq => pq.Document)
-                .Where(pq => pq.Status == ProcessingStatus.InProgress && 
-                           pq.StartedAt.HasValue && 
-                           pq.StartedAt.Value < thresholdTime)
-                .OrderBy(pq => pq.StartedAt)
-                .ToListAsync();
         }
     }
 }

@@ -16,7 +16,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
     /// </summary>
     public class DocumentRepository : RepositoryBase<Document>, IDocumentRepository
     {
-        ApplicationDbContext _context;
+        new ApplicationDbContext _context;
 
         public DocumentRepository(ApplicationDbContext context) : base(context)
         {
@@ -29,7 +29,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
         /// </summary>
         /// <param name="id">The unique identifier of the document</param>
         /// <returns>The document with loaded navigation properties, or null if not found</returns>
-        public async Task<Document?> GetByIdAsync(Guid id)
+        public override async Task<Document?> GetByIdAsync(Guid id)
         {
             var documentDtos = await _context.Database.SqlQueryRaw<DocumentDto>(
                 "EXEC dbo.GetDocumentById @DocumentId = {0}", id).ToListAsync();
@@ -113,19 +113,6 @@ namespace DocumentProcessor.Infrastructure.Repositories
                 .ToListAsync();
         }
 
-        /// <summary>
-        /// Retrieves documents uploaded by a specific user using stored procedure.
-        /// </summary>
-        /// <param name="userId">The ID of the user who uploaded the documents</param>
-        /// <returns>Documents uploaded by the specified user</returns>
-        public async Task<IEnumerable<Document>> GetByUserAsync(string userId)
-        {
-            var documentDtos = await _context.Database.SqlQueryRaw<DocumentDto>(
-                "EXEC dbo.GetDocumentsByUser @UserId = {0}", userId).ToListAsync();
-            
-            return documentDtos.Select(dto => dto.ToDocument()).ToList();
-        }
-
         public async Task<IEnumerable<Document>> GetPendingDocumentsAsync(int limit = 100)
         {
             return await _dbSet
@@ -158,7 +145,7 @@ namespace DocumentProcessor.Infrastructure.Repositories
             return document;
         }
 
-        public async Task<Document> UpdateAsync(Document document)
+        public new async Task<Document> UpdateAsync(Document document)
         {
             document.UpdatedAt = DateTime.UtcNow;
             _dbSet.Update(document);

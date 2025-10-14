@@ -6,7 +6,6 @@ using DocumentProcessor.Web.Services;
 using DocumentProcessor.Application;
 using DocumentProcessor.Core.Entities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 using System.IO;
@@ -30,52 +29,6 @@ builder.Services.AddInfrastructureServices(builder.Configuration);
 
 // Add application services (Document processing, Background services)
 builder.Services.AddApplicationServices();
-
-
-// Add ASP.NET Core Identity
-builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
-{
-    // Password settings
-    options.Password.RequireDigit = true;
-    options.Password.RequiredLength = 8;
-    options.Password.RequireNonAlphanumeric = true;
-    options.Password.RequireUppercase = true;
-    options.Password.RequireLowercase = true;
-    options.Password.RequiredUniqueChars = 4;
-
-    // Lockout settings
-    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
-    options.Lockout.MaxFailedAccessAttempts = 5;
-    options.Lockout.AllowedForNewUsers = true;
-
-    // User settings
-    options.User.RequireUniqueEmail = true;
-    options.User.AllowedUserNameCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._@+";
-
-    // Sign in settings
-    options.SignIn.RequireConfirmedEmail = false; // Set to true in production
-    options.SignIn.RequireConfirmedPhoneNumber = false;
-})
-.AddEntityFrameworkStores<ApplicationDbContext>()
-.AddDefaultTokenProviders();
-
-// Configure authentication cookies
-builder.Services.ConfigureApplicationCookie(options =>
-{
-    options.Cookie.HttpOnly = true;
-    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-    options.ExpireTimeSpan = TimeSpan.FromHours(8);
-    options.LoginPath = "/Account/Login";
-    options.LogoutPath = "/Account/Logout";
-    options.AccessDeniedPath = "/Account/AccessDenied";
-    options.SlidingExpiration = true;
-});
-
-// Add authorization policies
-builder.Services.AddAuthorizationBuilder()
-    .AddPolicy("RequireAdminRole", policy => policy.RequireRole("Administrator"))
-    .AddPolicy("RequireManagerRole", policy => policy.RequireRole("Administrator", "Manager"))
-    .AddPolicy("RequireUserRole", policy => policy.RequireRole("Administrator", "Manager", "User"));
 
 // Add health checks
 builder.Services.AddInfrastructureHealthChecks(builder.Configuration);
@@ -181,10 +134,46 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+// Re-queue stuck documents from previous runs
+using (var scope = app.Services.CreateScope())
+{
+    var processingService = scope.ServiceProvider.GetRequiredService<DocumentProcessor.Application.Services.IDocumentProcessingService>();
+    var processingQueueRepo = scope.ServiceProvider.GetService<DocumentProcessor.Core.Interfaces.IProcessingQueueRepository>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
-// Seed initial roles and admin user
-// Temporarily commented out for testing
-// await SeedIdentityData(app.Services);
+    if (processingQueueRepo != null)
+    {
+        logger.LogInformation("Checking for stuck documents in queue...");
+
+        // Get all pending queue items
+        var stuckItems = await processingQueueRepo.GetByStatusAsync(DocumentProcessor.Core.Entities.ProcessingStatus.Pending);
+        var stuckItemsList = stuckItems.ToList();
+
+        if (stuckItemsList.Any())
+        {
+            logger.LogInformation("Found {Count} stuck documents in queue. Re-queuing them...", stuckItemsList.Count);
+
+            foreach (var item in stuckItemsList)
+            {
+                try
+                {
+                    logger.LogInformation("Re-queuing document {DocumentId} from queue item {QueueId}", item.DocumentId, item.Id);
+                    await processingService.QueueDocumentForProcessingAsync(item.DocumentId);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to re-queue document {DocumentId}", item.DocumentId);
+                }
+            }
+
+            logger.LogInformation("Finished re-queuing stuck documents");
+        }
+        else
+        {
+            logger.LogInformation("No stuck documents found in queue");
+        }
+    }
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -205,10 +194,6 @@ app.UseResponseCompression();
 
 // Add rate limiting
 app.UseRateLimiter();
-
-// Add authentication and authorization
-app.UseAuthentication();
-app.UseAuthorization();
 
 app.UseAntiforgery();
 

@@ -1,12 +1,11 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using DocumentProcessor.Core.Entities;
 
 namespace DocumentProcessor.Infrastructure.Data
 {
-    public class ApplicationDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, string>
+    public class ApplicationDbContext : DbContext
     {
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
             : base(options)
@@ -18,12 +17,9 @@ namespace DocumentProcessor.Infrastructure.Data
         public DbSet<Classification> Classifications { get; set; }
         public DbSet<ProcessingQueue> ProcessingQueues { get; set; }
         public DbSet<DocumentMetadata> DocumentMetadata { get; set; }
-        public DbSet<UserActivityLog> UserActivityLogs { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            base.OnModelCreating(modelBuilder);
-
             // Configure Document entity
             modelBuilder.Entity<Document>(entity =>
             {
@@ -72,8 +68,7 @@ namespace DocumentProcessor.Infrastructure.Data
             {
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.AIModelUsed).HasMaxLength(100);
-                entity.Property(e => e.VerifiedBy).HasMaxLength(255);
-                
+
                 entity.HasIndex(e => new { e.DocumentId, e.DocumentTypeId });
                 entity.HasIndex(e => e.ConfidenceScore);
                 entity.HasIndex(e => e.ClassifiedAt);
@@ -123,57 +118,12 @@ namespace DocumentProcessor.Infrastructure.Data
                 entity.HasIndex(e => e.DocumentId).IsUnique();
             });
 
-            // Configure UserActivityLog entity
-            modelBuilder.Entity<UserActivityLog>(entity =>
-            {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
-                entity.Property(e => e.Activity).IsRequired().HasMaxLength(255);
-                entity.Property(e => e.Details).HasMaxLength(1000);
-                entity.Property(e => e.IpAddress).HasMaxLength(45);
-                entity.Property(e => e.UserAgent).HasMaxLength(500);
-                
-                entity.HasIndex(e => e.UserId);
-                entity.HasIndex(e => e.Timestamp);
-                
-                entity.HasOne(e => e.User)
-                    .WithMany(u => u.ActivityLogs)
-                    .HasForeignKey(e => e.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
-            });
-
-            // Configure ApplicationUser entity extensions
-            modelBuilder.Entity<ApplicationUser>(entity =>
-            {
-                entity.Property(e => e.FirstName).IsRequired().HasMaxLength(100);
-                entity.Property(e => e.LastName).IsRequired().HasMaxLength(100);
-                entity.Property(e => e.Department).HasMaxLength(100);
-                entity.Property(e => e.ProfilePictureUrl).HasMaxLength(500);
-                
-                entity.HasIndex(e => e.IsActive);
-                entity.HasIndex(e => e.CreatedAt);
-                
-                // Configure relationship with Documents
-                entity.HasMany(e => e.Documents)
-                    .WithOne()
-                    .HasForeignKey("UploadedById")
-                    .OnDelete(DeleteBehavior.Restrict);
-            });
-
-            // Configure ApplicationRole entity extensions
-            modelBuilder.Entity<ApplicationRole>(entity =>
-            {
-                entity.Property(e => e.Description).HasMaxLength(500);
-                entity.HasIndex(e => e.IsActive);
-            });
-
             // Configure table names
             modelBuilder.Entity<Document>().ToTable("Documents");
             modelBuilder.Entity<DocumentType>().ToTable("DocumentTypes");
             modelBuilder.Entity<Classification>().ToTable("Classifications");
             modelBuilder.Entity<ProcessingQueue>().ToTable("ProcessingQueues");
             modelBuilder.Entity<DocumentMetadata>().ToTable("DocumentMetadata");
-            modelBuilder.Entity<UserActivityLog>().ToTable("UserActivityLogs");
 
             // Seed initial document types
             var seedDate = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);

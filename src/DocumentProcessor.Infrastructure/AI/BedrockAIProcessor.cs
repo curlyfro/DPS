@@ -26,7 +26,41 @@ public class BedrockAIProcessor : IAIProcessor
     public string ModelId => _options.ClassificationModelId;
     public string ProviderName => "Amazon Bedrock";
 
-    [Obsolete("Obsolete")]
+    /// <summary>
+    /// Constructor that accepts DocumentContentExtractor directly (preferred)
+    /// </summary>
+    public BedrockAIProcessor(
+        ILogger<BedrockAIProcessor> logger,
+        IOptions<BedrockOptions> options,
+        DocumentContentExtractor contentExtractor)
+    {
+        _logger = logger;
+        _options = options.Value;
+        _contentExtractor = contentExtractor;
+
+        // Initialize Bedrock client
+        var config = new AmazonBedrockRuntimeConfig
+        {
+            RegionEndpoint = RegionEndpoint.GetBySystemName(_options.Region)
+        };
+
+        // Use profile if specified (for development)
+        if (!string.IsNullOrEmpty(_options.AwsProfile))
+        {
+            var credentials = new Amazon.Runtime.StoredProfileAWSCredentials(_options.AwsProfile);
+            _bedrockClient = new AmazonBedrockRuntimeClient(credentials, config);
+        }
+        else
+        {
+            // Use default credentials (IAM role, environment variables, etc.)
+            _bedrockClient = new AmazonBedrockRuntimeClient(config);
+        }
+    }
+
+    /// <summary>
+    /// Legacy constructor that accepts IServiceProvider (obsolete)
+    /// </summary>
+    [Obsolete("Use constructor that accepts DocumentContentExtractor directly instead")]
     public BedrockAIProcessor(
         ILogger<BedrockAIProcessor> logger,
         IOptions<BedrockOptions> options,
@@ -34,14 +68,14 @@ public class BedrockAIProcessor : IAIProcessor
     {
         _logger = logger;
         _options = options.Value;
-            
+
         // Try to get DocumentContentExtractor from DI, or create a new instance
         var contentExtractorLogger = serviceProvider.GetService<ILogger<DocumentContentExtractor>>();
         _contentExtractor = serviceProvider.GetService<DocumentContentExtractor>() ??
                             new DocumentContentExtractor(contentExtractorLogger ??
                                                          new Microsoft.Extensions.Logging.Abstractions.NullLogger<DocumentContentExtractor>(),
                                                          serviceProvider);
-            
+
         // Initialize Bedrock client
         var config = new AmazonBedrockRuntimeConfig
         {
@@ -140,72 +174,6 @@ public class BedrockAIProcessor : IAIProcessor
         }
     }
 
-    public async Task<DocumentExtractionResult> ExtractDataAsync(
-        Document document, 
-        Stream documentContent)
-    {
-        var startTime = DateTime.UtcNow;
-            
-        try
-        {
-            _logger.LogInformation("Extracting data from document {DocumentId} using Bedrock model: {Model}", 
-                document.Id, _options.ExtractionModelId);
-
-            var extractedContent = await _contentExtractor.ExtractContentAsync(document, documentContent);
-            string content = FormatExtractedContent(extractedContent);
-                
-            var prompt = BuildExtractionPrompt(content, document.DocumentType?.Name ?? "Document");
-            var response = await InvokeModelAsync(
-                _options.ExtractionModelId, 
-                prompt, 
-                CancellationToken.None);
-
-            var result = ParseExtractionResponse(response);
-            result.ProcessingTime = DateTime.UtcNow - startTime;
-            return result;
-        }
-        catch (ValidationException ex)
-        {
-            _logger.LogError(ex, "Model validation error for document {DocumentId}. Model: {Model}", document.Id, _options.ExtractionModelId);
-            var result = new DocumentExtractionResult
-            {
-                ProcessingTime = DateTime.UtcNow - startTime
-            };
-            result.Metadata["error"] = $"Model validation error: {ex.Message}";
-            return result;
-        }
-        catch (AmazonBedrockRuntimeException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
-        {
-            _logger.LogError(ex, "AWS Bedrock access denied for document {DocumentId}", document.Id);
-            var result = new DocumentExtractionResult
-            {
-                ProcessingTime = DateTime.UtcNow - startTime
-            };
-            result.Metadata["error"] = "AWS Bedrock access denied - check credentials and model permissions";
-            return result;
-        }
-        catch (Amazon.Runtime.AmazonServiceException ex)
-        {
-            _logger.LogError(ex, "AWS service error while extracting from document {DocumentId}", document.Id);
-            var result = new DocumentExtractionResult
-            {
-                ProcessingTime = DateTime.UtcNow - startTime
-            };
-            result.Metadata["error"] = $"AWS Error: {ex.Message}";
-            return result;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Unexpected error extracting data from document {DocumentId}", document.Id);
-            var result = new DocumentExtractionResult
-            {
-                ProcessingTime = DateTime.UtcNow - startTime
-            };
-            result.Metadata["error"] = ex.Message;
-            return result;
-        }
-    }
-
     public async Task<DocumentSummaryResult> GenerateSummaryAsync(
         Document document,
         Stream documentContent)
@@ -279,98 +247,6 @@ public class BedrockAIProcessor : IAIProcessor
                 ProcessingTime = DateTime.UtcNow - startTime
             };
         }
-    }
-
-    public async Task<DocumentIntentResult> DetectIntentAsync(
-        Document document, 
-        Stream documentContent)
-    {
-        var startTime = DateTime.UtcNow;
-            
-        try
-        {
-            _logger.LogInformation("Detecting intent for document {DocumentId} using Bedrock model: {Model}", 
-                document.Id, _options.IntentModelId);
-
-            var extractedContent = await _contentExtractor.ExtractContentAsync(document, documentContent);
-            string content = FormatExtractedContent(extractedContent);
-                
-            var prompt = BuildIntentPrompt(content);
-            var response = await InvokeModelAsync(
-                _options.IntentModelId, 
-                prompt, 
-                CancellationToken.None);
-
-            var result = ParseIntentResponse(response);
-            result.ProcessingTime = DateTime.UtcNow - startTime;
-            return result;
-        }
-        catch (ValidationException ex)
-        {
-            _logger.LogError(ex, "Model validation error for document {DocumentId}. Model: {Model}", document.Id, _options.IntentModelId);
-            return new DocumentIntentResult
-            {
-                PrimaryIntent = "Model Error",
-                SuggestedAction = $"Check model configuration: {ex.Message}",
-                Confidence = 0,
-                ProcessingTime = DateTime.UtcNow - startTime
-            };
-        }
-        catch (AmazonBedrockRuntimeException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
-        {
-            _logger.LogError(ex, "AWS Bedrock access denied for document {DocumentId}", document.Id);
-            return new DocumentIntentResult
-            {
-                PrimaryIntent = "Configuration Required",
-                SuggestedAction = "Configure AWS Bedrock access and model permissions",
-                Confidence = 0,
-                ProcessingTime = DateTime.UtcNow - startTime
-            };
-        }
-        catch (Amazon.Runtime.AmazonServiceException ex)
-        {
-            _logger.LogError(ex, "AWS service error while detecting intent for document {DocumentId}", document.Id);
-            return new DocumentIntentResult
-            {
-                PrimaryIntent = "Service Error",
-                SuggestedAction = $"Check AWS status: {ex.Message}",
-                Confidence = 0,
-                ProcessingTime = DateTime.UtcNow - startTime
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Unexpected error detecting intent for document {DocumentId}", document.Id);
-            return new DocumentIntentResult
-            {
-                PrimaryIntent = "Processing Error",
-                SuggestedAction = "Check application logs",
-                Confidence = 0,
-                ProcessingTime = DateTime.UtcNow - startTime
-            };
-        }
-    }
-
-    public async Task<ProcessingCost> EstimateCostAsync(long fileSize, string contentType)
-    {
-        // Estimate tokens based on file size (rough approximation)
-        // Assuming ~4 characters per token and some overhead for prompts
-        var estimatedCharacters = fileSize * 0.8; // Assuming 80% of file is text
-        var estimatedTokens = (int)(estimatedCharacters / 4) + 500; // Add 500 for prompt overhead
-            
-        // Claude 3 Haiku pricing: $0.25 per million input tokens, $1.25 per million output tokens
-        // Using average for estimation
-        var costPerMillionTokens = 0.75m;
-        var estimatedCost = (estimatedTokens / 1000000m) * costPerMillionTokens;
-            
-        return await Task.FromResult(new ProcessingCost
-        {
-            EstimatedCost = estimatedCost,
-            Currency = "USD",
-            EstimatedTokens = estimatedTokens,
-            ModelUsed = _options.ClassificationModelId,
-            PricingTier = "Pay-as-you-go"
-        });
     }
 
     private async Task<string> ReadStreamContent(Stream stream)
@@ -500,23 +376,7 @@ Example response:
 {{""category"": ""Invoice"", ""confidence"": 0.95, ""tags"": [""financial"", ""billing""]}}";
     }
 
-    private string BuildExtractionPrompt(string content, string documentType)
-    {
-        // Content is already truncated in ReadStreamContent
-        return $@"Extract key entities from this {documentType} document.
-
-Document content:
-{content}
-
-Respond with ONLY a valid JSON object (no additional text) containing an 'entities' array, where each entity has:
-- type: entity type (e.g., DATE, PERSON, ORGANIZATION, AMOUNT, etc.)
-- value: extracted value
-- confidence: extraction confidence (0-1)
-
-Focus on extracting relevant information for a {documentType}.";
-    }
-
-    private string BuildSummarizationPrompt(string content, int maxLength, string fileName = null, string documentId = null)
+    private string BuildSummarizationPrompt(string content, int maxLength, string? fileName = null, string? documentId = null)
     {
         var promptBuilder = new StringBuilder();
         promptBuilder.AppendLine($"Provide a concise summary of the following document in approximately {maxLength} characters.");
@@ -536,25 +396,8 @@ Focus on extracting relevant information for a {documentType}.";
         promptBuilder.AppendLine(content);
         promptBuilder.AppendLine();
         promptBuilder.AppendLine("Create a clear, informative summary that captures the main points and purpose of the document.");
-            
+
         return promptBuilder.ToString();
-    }
-
-    private string BuildIntentPrompt(string content)
-    {
-        // Content is already truncated in ReadStreamContent
-        return $@"Analyze the intent or purpose of this document.
-
-Document content:
-{content}
-
-Respond with ONLY a valid JSON object (no additional text) containing:
-- primaryIntent: main purpose of the document
-- confidence: overall confidence (0-1)
-- suggestedAction: recommended action
-
-Example response:
-{{""primaryIntent"": ""Payment Request"", ""confidence"": 0.9, ""suggestedAction"": ""Process payment""}}";
     }
 
     private DocumentClassificationResult ParseClassificationResponse(string response)
@@ -603,49 +446,6 @@ Example response:
         }
     }
 
-    private DocumentExtractionResult ParseExtractionResponse(string response)
-    {
-        try
-        {
-            // Clean the response by removing any markdown code formatting or backticks
-            string cleanedResponse = CleanJsonResponse(response);
-            
-            _logger.LogDebug("Cleaned response for parsing: {CleanedResponse}", cleanedResponse);
-            
-            // Parse the cleaned JSON
-            var json = JsonDocument.Parse(cleanedResponse);
-            var root = json.RootElement;
-
-            var result = new DocumentExtractionResult();
-                
-            if (root.TryGetProperty("entities", out var entitiesArray))
-            {
-                foreach (var entity in entitiesArray.EnumerateArray())
-                {
-                    result.Entities.Add(new ExtractedEntity
-                    {
-                        Type = entity.TryGetProperty("type", out var type)
-                            ? type.GetString() ?? "" : "",
-                        Value = entity.TryGetProperty("value", out var val)
-                            ? val.GetString() ?? "" : "",
-                        Confidence = entity.TryGetProperty("confidence", out var conf)
-                            ? conf.GetDouble() : 0.8
-                    });
-                }
-            }
-
-            result.Metadata["model"] = _options.ExtractionModelId;
-            result.Metadata["entityCount"] = result.Entities.Count.ToString();
-
-            return result;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to parse extraction response: {Response}", response);
-            return new DocumentExtractionResult();
-        }
-    }
-    
     /// <summary>
     /// Cleans a response string by removing any markdown code formatting and other non-JSON content
     /// </summary>
@@ -702,42 +502,6 @@ Example response:
         }
 
         return result;
-    }
-
-    private DocumentIntentResult ParseIntentResponse(string response)
-    {
-        try
-        {
-            // Clean the response by removing any markdown code formatting
-            string cleanedResponse = CleanJsonResponse(response);
-            
-            _logger.LogDebug("Cleaned intent response: {CleanedResponse}", cleanedResponse);
-            
-            // Parse the cleaned JSON
-            var json = JsonDocument.Parse(cleanedResponse);
-            var root = json.RootElement;
-
-            var result = new DocumentIntentResult
-            {
-                PrimaryIntent = root.TryGetProperty("primaryIntent", out var intent)
-                    ? intent.GetString() ?? "Unknown" : "Unknown",
-                Confidence = root.TryGetProperty("confidence", out var conf)
-                    ? conf.GetDouble() : 0.5,
-                SuggestedAction = root.TryGetProperty("suggestedAction", out var action)
-                    ? action.GetString() ?? "" : ""
-            };
-
-            return result;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to parse intent response: {Response}", response);
-            return new DocumentIntentResult
-            {
-                PrimaryIntent = "Unknown",
-                Confidence = 0
-            };
-        }
     }
 
     private string FormatExtractedContent(DocumentContent extractedContent)

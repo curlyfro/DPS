@@ -239,7 +239,7 @@
             {
                 if (item.DocumentId != Guid.Empty)
                 {
-                    item.Document = await DocumentRepository.GetByIdAsync(item.DocumentId);
+                    item.Document = (await DocumentRepository.GetByIdAsync(item.DocumentId))!;
                 }
             }
 

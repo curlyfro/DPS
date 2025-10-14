@@ -37,11 +37,24 @@ public class AIProcessorFactory : IAIProcessorFactory
     {
         var bedrockOptions = new BedrockOptions();
         _configuration.GetSection("Bedrock").Bind(bedrockOptions);
-            
+
+        // Get or create DocumentContentExtractor
+        var contentExtractorLogger = _serviceProvider.GetService<ILogger<DocumentContentExtractor>>();
+        var contentExtractor = _serviceProvider.GetService<DocumentContentExtractor>();
+
+        if (contentExtractor == null)
+        {
+            // Create DocumentContentExtractor if not registered
+            // Pass null for IServiceProvider since it's optional and we want to avoid disposed service provider issues
+            contentExtractor = new DocumentContentExtractor(
+                contentExtractorLogger ?? new Microsoft.Extensions.Logging.Abstractions.NullLogger<DocumentContentExtractor>(),
+                null);
+        }
+
         return new BedrockAIProcessor(
             _loggerFactory.CreateLogger<BedrockAIProcessor>(),
             Options.Create(bedrockOptions),
-            _serviceProvider);
+            contentExtractor);
     }
 
     public IAIProcessor CreateProcessor(AIProviderType providerType)

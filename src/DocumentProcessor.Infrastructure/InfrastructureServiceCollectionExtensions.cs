@@ -55,13 +55,7 @@ public static class InfrastructureServiceCollectionExtensions
             var logger = provider.GetRequiredService<ILogger<DocumentContentExtractor>>();
             return new DocumentContentExtractor(logger, provider);
         });
-        
-        // Register Amazon Transcribe service for MP3 transcription
-        services.AddScoped<AmazonTranscribeService>();
 
-        // Use database-backed queue instead of in-memory queue
-        services.AddSingleton<IAIProcessingQueue, DatabaseProcessingQueue>();
-            
         // Register Bedrock configuration
         var bedrockSection = configuration.GetSection("Bedrock");
         services.Configure<BedrockOptions>(options =>
@@ -82,16 +76,7 @@ public static class InfrastructureServiceCollectionExtensions
             
         // Register hosted services
         var maxConcurrency = configuration.GetValue<int>("BackgroundTasks:MaxConcurrency", 3);
-            
-        // Register the base QueuedHostedService
-        services.AddHostedService(provider =>
-        {
-            var logger = provider.GetRequiredService<ILogger<QueuedHostedService>>();
-            var queue = provider.GetRequiredService<IBackgroundTaskQueue>();
-            logger.LogInformation("Creating QueuedHostedService");
-            return new QueuedHostedService(queue, logger);
-        });
-            
+
         // Register the DocumentProcessingHostedService
         services.AddHostedService(provider =>
         {
@@ -100,10 +85,7 @@ public static class InfrastructureServiceCollectionExtensions
             logger.LogInformation("Creating DocumentProcessingHostedService with max concurrency: {MaxConcurrency}", maxConcurrency);
             return new DocumentProcessingHostedService(queue, logger, maxConcurrency);
         });
-            
-        // Register the AI Queue Processing Service for database-backed queue
-        services.AddHostedService<AIQueueProcessingService>();
-            
+
         // Note: IDocumentProcessingService is registered in the Application layer
 
         return services;
