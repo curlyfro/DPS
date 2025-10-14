@@ -44,7 +44,7 @@ DocumentProcessor/
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/document-processor.git
+   git clone https://github.com/aws-samples/sample-document-processing-system.git
    cd document-processor
    ```
 
