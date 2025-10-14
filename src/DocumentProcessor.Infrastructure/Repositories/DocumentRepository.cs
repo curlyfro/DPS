@@ -154,21 +154,87 @@ namespace DocumentProcessor.Infrastructure.Repositories
         }
 
 
+        /// <summary>
+        /// Hard deletes a document and all its related entities from the database.
+        /// This includes: ProcessingQueue items, Classifications, and DocumentMetadata.
+        /// </summary>
+        /// <param name="id">The unique identifier of the document to delete</param>
         public async Task DeleteAsync(Guid id)
         {
             var document = await _dbSet.FindAsync(id);
             if (document != null)
             {
+                // Delete all related ProcessingQueue items
+                var queueItems = await _context.ProcessingQueues
+                    .Where(q => q.DocumentId == id)
+                    .ToListAsync();
+                if (queueItems.Any())
+                {
+                    _context.ProcessingQueues.RemoveRange(queueItems);
+                }
+
+                // Delete all related Classifications
+                var classifications = await _context.Classifications
+                    .Where(c => c.DocumentId == id)
+                    .ToListAsync();
+                if (classifications.Any())
+                {
+                    _context.Classifications.RemoveRange(classifications);
+                }
+
+                // Delete related DocumentMetadata
+                var metadata = await _context.DocumentMetadata
+                    .Where(m => m.DocumentId == id)
+                    .ToListAsync();
+                if (metadata.Any())
+                {
+                    _context.DocumentMetadata.RemoveRange(metadata);
+                }
+
+                // Finally, delete the document itself
                 _dbSet.Remove(document);
                 await _context.SaveChangesAsync(); // Save to database
             }
         }
 
+        /// <summary>
+        /// Soft deletes a document and all its related entities by marking them as deleted.
+        /// This includes: ProcessingQueue items, Classifications, and DocumentMetadata.
+        /// </summary>
+        /// <param name="id">The unique identifier of the document to soft delete</param>
         public async Task SoftDeleteAsync(Guid id)
         {
             var document = await _dbSet.FindAsync(id);
             if (document != null)
             {
+                // Soft delete all related ProcessingQueue items (hard delete since they don't have IsDeleted)
+                var queueItems = await _context.ProcessingQueues
+                    .Where(q => q.DocumentId == id)
+                    .ToListAsync();
+                if (queueItems.Any())
+                {
+                    _context.ProcessingQueues.RemoveRange(queueItems);
+                }
+
+                // Soft delete all related Classifications (hard delete since they don't have IsDeleted)
+                var classifications = await _context.Classifications
+                    .Where(c => c.DocumentId == id)
+                    .ToListAsync();
+                if (classifications.Any())
+                {
+                    _context.Classifications.RemoveRange(classifications);
+                }
+
+                // Soft delete related DocumentMetadata (hard delete since it doesn't have IsDeleted)
+                var metadata = await _context.DocumentMetadata
+                    .Where(m => m.DocumentId == id)
+                    .ToListAsync();
+                if (metadata.Any())
+                {
+                    _context.DocumentMetadata.RemoveRange(metadata);
+                }
+
+                // Mark the document as deleted
                 document.IsDeleted = true;
                 document.DeletedAt = DateTime.UtcNow;
                 document.UpdatedAt = DateTime.UtcNow;

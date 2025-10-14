@@ -96,8 +96,8 @@
                                         </td>
                                         <td>@item.ProcessingType</td>
                                         <td>
-                                            <span class="badge @GetQueueStatusBadgeClass(item.Status)">
-                                                @item.Status
+                                            <span class="badge @GetDocumentStatusBadgeClass(item.Document?.Status ?? DocumentStatus.Pending)">
+                                                @(item.Document?.Status.ToString() ?? "Unknown")
                                             </span>
                                         </td>
                                         <td>
@@ -365,6 +365,19 @@
             ProcessingStatus.Retrying => "bg-warning",
             ProcessingStatus.Cancelled => "bg-dark",
             ProcessingStatus.Skipped => "bg-info",
+            _ => "bg-light"
+        };
+    }
+
+    private string GetDocumentStatusBadgeClass(DocumentStatus status)
+    {
+        return status switch
+        {
+            DocumentStatus.Pending => "bg-secondary",
+            DocumentStatus.Queued => "bg-info",
+            DocumentStatus.Processing => "bg-primary",
+            DocumentStatus.Processed => "bg-success",
+            DocumentStatus.Failed => "bg-danger",
             _ => "bg-light"
         };
     }
