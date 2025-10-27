@@ -11,7 +11,7 @@
     "AllowedHosts":  "*",
     "ConnectionStrings":  {
                               "LocalSqlServer":  "Server=(localdb)\\MSSQLLocalDB;Database=DocumentProcessorDB_Clean;Integrated Security=true;MultipleActiveResultSets=true;Encrypt=false",
-                              "DefaultConnection":  "Server=dps.crxydkntj70g.us-east-1.rds.amazonaws.com,1433;Database=DPS;User Id=admin;Password=I?cIcM3(o~dt]h5e6l~v~llY~tYB;TrustServerCertificate=true;MultipleActiveResultSets=true"
+                              "DefaultConnection":  "Server=dps.crxydkntj70g.us-east-1.rds.amazonaws.com,1433;Database=DPS;User Id=admin;Password=G8kJyCL?1$4kWDbJc80vdj0C-t1A;TrustServerCertificate=true;MultipleActiveResultSets=true"
                           },
     "DocumentProcessing":  {
                                "StoragePath":  "uploads",
