@@ -1,17 +1,17 @@
 # 📄 Document Processing System
 
-A business-ready document processing platform built with .NET 8 and Blazor that leverages Amazon Bedrock for intelligent document analysis, classification, and metadata extraction.
+A modern, enterprise-grade document processing platform built with .NET 8 and Blazor that leverages AWS Bedrock AI for intelligent document analysis, classification, and metadata extraction.
 
 ![Dashboard Overview](screenshots/Screenshot%202025-08-13%20113417.png)
 
 ## 🌟 Key Features
 
-- **🤖 AI-Powered Processing**: Integrates with Amazon Bedrock (Claude 3 models) for intelligent document analysis
+- **🤖 AI-Powered Processing**: Integrates with AWS Bedrock (Claude 3 models) for intelligent document analysis
 - **📊 Real-time Dashboard**: Monitor document processing statistics, queue status, and system health
 - **🔍 Smart Classification**: Automatically categorize documents using AI-driven classification
 - **📝 Metadata Extraction**: Extract and store structured metadata from unstructured documents  
 - **⚡ Background Processing**: Asynchronous document processing with queue management
-- **🔐 Security-focused design**: Built-in authentication with ASP.NET Core Identity
+- **🔐 Security-First**: Built-in authentication with ASP.NET Core Identity
 - **📱 Responsive UI**: Modern Blazor Server-Side Rendering with Bootstrap 5
 - **🔄 Real-time Updates**: SignalR integration for live processing status updates
 - **📈 Analytics & Charts**: Visual insights with Chart.js integration
@@ -44,7 +44,7 @@ DocumentProcessor/
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/aws-samples/sample-document-processing-system.git
+   git clone https://github.com/yourusername/document-processor.git
    cd document-processor
    ```
 
@@ -90,9 +90,9 @@ DocumentProcessor/
 ## 📋 Features Overview
 
 ### Document Management
-- **Multi-format Support**: Support for PDF, DOCX, TXT, RTF, ODT, JPG, PNG, XLSX formats
+- **Multi-format Support**: PDF, DOCX, TXT, RTF, ODT, JPG, PNG, XLSX
 - **Drag-and-drop Upload**: Intuitive file upload interface
-- **Batch Processing**: Process multiple documents with configurable concurrency (default: 3 concurrent)
+- **Batch Processing**: Queue multiple documents for processing
 - **Document Viewer**: Preview documents directly in the browser
 - **Search & Filter**: Find documents by metadata, type, or content
 
@@ -142,7 +142,7 @@ DocumentProcessor/
   - SQL Server 
   - Temporal tables for audit trails
 - **AI/ML**: 
-  - Amazon Bedrock
+  - AWS Bedrock
   - Claude 3 Haiku & Sonnet models
 - **Real-time**: 
   - SignalR for live updates
@@ -170,7 +170,7 @@ src/
 │
 ├── DocumentProcessor.Infrastructure/   # Infrastructure layer
 │   ├── AI/                            # AI processing services
-│   │   ├── BedrockAIProcessor.cs     # Amazon Bedrock integration
+│   │   ├── BedrockAIProcessor.cs     # AWS Bedrock integration
 │   │   └── DocumentContentExtractor.cs # Content extraction
 │   ├── Data/                          # EF Core context
 │   │   └── ApplicationDbContext.cs   
@@ -267,14 +267,14 @@ dotnet test tests/DocumentProcessor.Tests
 
 ## 🔒 Security Features
 
-- Authentication using ASP.NET Core Identity
-- Role-based Access with configurable user roles and permissions
-- Input validation including file type and size restrictions
-- File Type Validation using whitelist-based file extension filtering
-- File storage with access controls outside web root
-- SQL query protection using parameterized queries
-- Cross-site scripting protection using Blazor's built-in security features
-- CSRF Protection using Anti-forgery tokens
+- **Authentication**: ASP.NET Core Identity integration
+- **Role-based Access**: Configurable user roles and permissions
+- **Input Validation**: Comprehensive validation on all inputs
+- **File Type Validation**: Whitelist-based file extension filtering
+- **Secure File Storage**: Files stored outside web root
+- **SQL Injection Prevention**: Parameterized queries via EF Core
+- **XSS Protection**: Built-in Blazor security features
+- **CSRF Protection**: Anti-forgery tokens
 
 ## 🚢 Deployment
 
@@ -341,12 +341,36 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 - Ensure all tests pass before submitting PR
 - Add meaningful commit messages
 
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
 ## 🆘 Support
 
 For issues, questions, or suggestions:
 - Open an issue on GitHub
 - Check existing issues before creating new ones
 - Provide detailed information for bug reports
+
+## 🗺️ Roadmap
+
+### Short-term (Q1 2025)
+- [ ] Add support for additional AI providers (OpenAI, Azure OpenAI)
+- [ ] Implement OCR for scanned documents
+- [ ] Add batch export functionality
+- [ ] Enhanced search with full-text search
+
+### Medium-term (Q2-Q3 2025)
+- [ ] Document versioning and change tracking
+- [ ] Multi-tenant support
+- [ ] REST API for external integrations
+- [ ] Mobile-responsive design improvements
+
+### Long-term (Q4 2025 and beyond)
+- [ ] Workflow automation features
+- [ ] Machine learning model training on classified documents
+- [ ] Advanced analytics and reporting
+- [ ] Plugin architecture for custom processors
 
 ## 📸 Screenshots
 
@@ -381,18 +405,12 @@ Additional documentation can be found in the `/docs` directory:
 ## 🙏 Acknowledgments
 
 - Built with [.NET 8](https://dotnet.microsoft.com/)
-- AI powered by [Amazon Bedrock](https://aws.amazon.com/bedrock/)
+- AI powered by [AWS Bedrock](https://aws.amazon.com/bedrock/)
 - UI components from [Bootstrap](https://getbootstrap.com/)
 - Charts by [Chart.js](https://www.chartjs.org/)
 
-## Security
-
-See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
-
-## License
-
-This library is licensed under the MIT-0 License. See the LICENSE file.
-
 ---
 
-**Built with ❤️ using .NET 8 and Amazon Bedrock**
+**Built with ❤️ using .NET 8 and AWS Bedrock AI**
+
+For more information, visit our [documentation](https://github.com/yourusername/document-processor/wiki) or contact the maintainers.
