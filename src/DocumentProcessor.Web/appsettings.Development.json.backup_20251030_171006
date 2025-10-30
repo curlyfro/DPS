@@ -1,0 +1,11 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=atx-database.ckxhjowsksmo.us-east-1.rds.amazonaws.com,1433;Database=DPS;User Id=admin;Password=T]n2ypjr4Ts*D?6jMepf$IzgSV?q;TrustServerCertificate=true;MultipleActiveResultSets=true"
+  }
+}
