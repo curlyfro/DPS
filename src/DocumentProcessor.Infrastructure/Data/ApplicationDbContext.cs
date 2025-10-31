@@ -119,11 +119,11 @@ namespace DocumentProcessor.Infrastructure.Data
             });
 
             // Configure table names
-            modelBuilder.Entity<Document>().ToTable("Documents");
-            modelBuilder.Entity<DocumentType>().ToTable("DocumentTypes");
-            modelBuilder.Entity<Classification>().ToTable("Classifications");
-            modelBuilder.Entity<ProcessingQueue>().ToTable("ProcessingQueues");
-            modelBuilder.Entity<DocumentMetadata>().ToTable("DocumentMetadata");
+            modelBuilder.Entity<Document>().ToTable("documents", "dps_dbo");
+            modelBuilder.Entity<DocumentType>().ToTable("documenttypes", "dps_dbo");
+            modelBuilder.Entity<Classification>().ToTable("classifications", "dps_dbo");
+            modelBuilder.Entity<ProcessingQueue>().ToTable("processingqueues", "dps_dbo");
+            modelBuilder.Entity<DocumentMetadata>().ToTable("documentmetadata", "dps_dbo");
 
             // Seed initial document types
             var seedDate = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
