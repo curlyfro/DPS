@@ -4,6 +4,7 @@ using DocumentProcessor.Infrastructure.BackgroundTasks;
 using DocumentProcessor.Infrastructure.Data;
 using DocumentProcessor.Infrastructure.Providers;
 using DocumentProcessor.Infrastructure.Repositories;
+using DocumentProcessor.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,9 +21,9 @@ public static class InfrastructureServiceCollectionExtensions
         IConfiguration configuration)
     {
         // Add Entity Framework
-        // To switch to Local SQL Server, comment out the line below and uncomment the next line
-        services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
-        //services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(configuration.GetConnectionString("LocalSqlServer")));
+        // Build connection string from AWS Secrets Manager
+        var connectionString = BuildConnectionStringFromSecretsManager().GetAwaiter().GetResult();
+        services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(connectionString));
 
         // Register repositories
         services.AddScoped<IDocumentRepository, DocumentRepository>();
@@ -128,5 +129,29 @@ public static class InfrastructureServiceCollectionExtensions
             logger.LogError(ex, "An error occurred while migrating the database");
             throw;
         }
+    }
+
+    /// <summary>
+    /// Builds a SQL Server connection string from AWS Secrets Manager
+    /// </summary>
+    private static async Task<string> BuildConnectionStringFromSecretsManager()
+    {
+        var secretsService = new SecretsManagerService();
+
+        // Get credentials from secret with description starting with "Password for RDS MSSQL used for MAM319."
+        var credentialsSecretJson = await secretsService.GetSecretByDescriptionPrefixAsync("Password for RDS MSSQL used for MAM319.");
+        var username = secretsService.GetFieldFromSecret(credentialsSecretJson, "username");
+        var password = secretsService.GetFieldFromSecret(credentialsSecretJson, "password");
+
+        // Get connection info from secret named "atx-db-modernization-1"
+        var connectionInfoSecretJson = await secretsService.GetSecretAsync("atx-db-modernization-1");
+        var host = secretsService.GetFieldFromSecret(connectionInfoSecretJson, "host");
+        var port = secretsService.GetFieldFromSecret(connectionInfoSecretJson, "port");
+        var dbname = secretsService.GetFieldFromSecret(connectionInfoSecretJson, "dbname");
+
+        // Build SQL Server connection string
+        var connectionString = $"Server={host},{port};Database={dbname};User Id={username};Password={password};TrustServerCertificate=true;MultipleActiveResultSets=true";
+
+        return connectionString;
     }
 }
