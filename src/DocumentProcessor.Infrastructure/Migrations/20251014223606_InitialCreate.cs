@@ -13,161 +13,175 @@ namespace DocumentProcessor.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.EnsureSchema(
+                name: "dps_dbo");
+                
             migrationBuilder.CreateTable(
-                name: "DocumentTypes",
+                name: "documenttypes",
+                schema: "dps_dbo",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    Name = table.Column<string>(type: "nvarchar(255)", maxLength: 255, nullable: false),
-                    Description = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: false),
-                    Category = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    IsActive = table.Column<bool>(type: "bit", nullable: false),
-                    Priority = table.Column<int>(type: "int", nullable: false),
-                    FileExtensions = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
-                    Keywords = table.Column<string>(type: "nvarchar(2000)", maxLength: 2000, nullable: true),
-                    ProcessingRules = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    name = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
+                    description = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: false),
+                    category = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    isactive = table.Column<bool>(type: "boolean", nullable: false),
+                    priority = table.Column<int>(type: "integer", nullable: false),
+                    fileextensions = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    keywords = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    processingrules = table.Column<string>(type: "text", nullable: true),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_DocumentTypes", x => x.Id);
+                    table.PrimaryKey("PK_documenttypes", x => x.id);
+                });}
+
+            migrationBuilder.CreateTable(
+                name: "documents",
+                schema: "dps_dbo",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    filename = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    originalfilename = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    fileextension = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    filesize = table.Column<long>(type: "bigint", nullable: false),
+                    contenttype = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    storagepath = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: false),
+                    s3key = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    s3bucket = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
+                    source = table.Column<int>(type: "integer", nullable: false),
+                    status = table.Column<int>(type: "integer", nullable: false),
+                    documenttypeid = table.Column<Guid>(type: "uuid", nullable: true),
+                    extractedtext = table.Column<string>(type: "text", nullable: true),
+                    summary = table.Column<string>(type: "text", nullable: true),
+                    uploadedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    processedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    uploadedby = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    isdeleted = table.Column<bool>(type: "boolean", nullable: false),
+                    deletedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_documents", x => x.id);
+                    table.ForeignKey(
+                        name: "FK_documents_documenttypes_documenttypeid",
+                        column: x => x.documenttypeid,
+                        principalSchema: "dps_dbo",
+                        principalTable: "documenttypes",
+                        principalColumn: "id");
                 });
 
             migrationBuilder.CreateTable(
-                name: "Documents",
+                name: "classifications",
+                schema: "dps_dbo",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    FileName = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
-                    OriginalFileName = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
-                    FileExtension = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
-                    FileSize = table.Column<long>(type: "bigint", nullable: false),
-                    ContentType = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    StoragePath = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: false),
-                    S3Key = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
-                    S3Bucket = table.Column<string>(type: "nvarchar(255)", maxLength: 255, nullable: true),
-                    Source = table.Column<int>(type: "int", nullable: false),
-                    Status = table.Column<int>(type: "int", nullable: false),
-                    DocumentTypeId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
-                    ExtractedText = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    Summary = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    UploadedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    ProcessedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    UploadedBy = table.Column<string>(type: "nvarchar(255)", maxLength: 255, nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
-                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    documentid = table.Column<Guid>(type: "uuid", nullable: false),
+                    documenttypeid = table.Column<Guid>(type: "uuid", nullable: false),
+                    confidencescore = table.Column<double>(type: "double precision", nullable: false),
+                    method = table.Column<int>(type: "integer", nullable: false),
+                    aimodelused = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    airesponse = table.Column<string>(type: "text", nullable: true),
+                    ismanuallyverified = table.Column<bool>(type: "boolean", nullable: false),
+                    classifiedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Documents", x => x.Id);
+                    table.PrimaryKey("PK_classifications", x => x.id);
                     table.ForeignKey(
-                        name: "FK_Documents_DocumentTypes_DocumentTypeId",
-                        column: x => x.DocumentTypeId,
-                        principalTable: "DocumentTypes",
-                        principalColumn: "Id");
-                });
-
-            migrationBuilder.CreateTable(
-                name: "Classifications",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    DocumentId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    DocumentTypeId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    ConfidenceScore = table.Column<double>(type: "float", nullable: false),
-                    Method = table.Column<int>(type: "int", nullable: false),
-                    AIModelUsed = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
-                    AIResponse = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    IsManuallyVerified = table.Column<bool>(type: "bit", nullable: false),
-                    ClassifiedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Classifications", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_Classifications_DocumentTypes_DocumentTypeId",
-                        column: x => x.DocumentTypeId,
-                        principalTable: "DocumentTypes",
-                        principalColumn: "Id",
+                        name: "FK_classifications_documenttypes_documenttypeid",
+                        column: x => x.documenttypeid,
+                        principalSchema: "dps_dbo",
+                        principalTable: "documenttypes",
+                        principalColumn: "id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_Classifications_Documents_DocumentId",
-                        column: x => x.DocumentId,
-                        principalTable: "Documents",
-                        principalColumn: "Id",
+                        name: "FK_classifications_documents_documentid",
+                        column: x => x.documentid,
+                        principalSchema: "dps_dbo",
+                        principalTable: "documents",
+                        principalColumn: "id",
                         onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
-                name: "DocumentMetadata",
+                name: "documentmetadata",
+                schema: "dps_dbo",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    DocumentId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    Author = table.Column<string>(type: "nvarchar(255)", maxLength: 255, nullable: true),
-                    Title = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
-                    Subject = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
-                    Keywords = table.Column<string>(type: "nvarchar(2000)", maxLength: 2000, nullable: true),
-                    CreationDate = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    ModificationDate = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    PageCount = table.Column<int>(type: "int", nullable: true),
-                    WordCount = table.Column<int>(type: "int", nullable: true),
-                    Language = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: true),
-                    Tags = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    documentid = table.Column<Guid>(type: "uuid", nullable: false),
+                    author = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
+                    title = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    subject = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    keywords = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    creationdate = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    modificationdate = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    pagecount = table.Column<int>(type: "integer", nullable: true),
+                    wordcount = table.Column<int>(type: "integer", nullable: true),
+                    language = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: true),
+                    tags = table.Column<string>(type: "text", nullable: true),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_DocumentMetadata", x => x.Id);
+                    table.PrimaryKey("PK_documentmetadata", x => x.id);
                     table.ForeignKey(
-                        name: "FK_DocumentMetadata_Documents_DocumentId",
-                        column: x => x.DocumentId,
-                        principalTable: "Documents",
-                        principalColumn: "Id",
+                        name: "FK_documentmetadata_documents_documentid",
+                        column: x => x.documentid,
+                        principalSchema: "dps_dbo",
+                        principalTable: "documents",
+                        principalColumn: "id",
                         onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
-                name: "ProcessingQueues",
+                name: "processingqueues",
+                schema: "dps_dbo",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    DocumentId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    ProcessingType = table.Column<int>(type: "int", nullable: false),
-                    Status = table.Column<int>(type: "int", nullable: false),
-                    Priority = table.Column<int>(type: "int", nullable: false),
-                    RetryCount = table.Column<int>(type: "int", nullable: false),
-                    MaxRetries = table.Column<int>(type: "int", nullable: false),
-                    StartedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    CompletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    ErrorMessage = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
-                    ErrorDetails = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    ProcessorId = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
-                    ResultData = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    NextRetryAt = table.Column<DateTime>(type: "datetime2", nullable: true)
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    documentid = table.Column<Guid>(type: "uuid", nullable: false),
+                    processingtype = table.Column<int>(type: "integer", nullable: false),
+                    status = table.Column<int>(type: "integer", nullable: false),
+                    priority = table.Column<int>(type: "integer", nullable: false),
+                    retrycount = table.Column<int>(type: "integer", nullable: false),
+                    maxretries = table.Column<int>(type: "integer", nullable: false),
+                    startedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    completedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    errormessage = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    errordetails = table.Column<string>(type: "text", nullable: true),
+                    processorid = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    resultdata = table.Column<string>(type: "text", nullable: true),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    nextretryat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_ProcessingQueues", x => x.Id);
+                    table.PrimaryKey("PK_processingqueues", x => x.id);
                     table.ForeignKey(
-                        name: "FK_ProcessingQueues_Documents_DocumentId",
-                        column: x => x.DocumentId,
-                        principalTable: "Documents",
-                        principalColumn: "Id",
+                        name: "FK_processingqueues_documents_documentid",
+                        column: x => x.documentid,
+                        principalSchema: "dps_dbo",
+                        principalTable: "documents",
+                        principalColumn: "id",
                         onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.InsertData(
-                table: "DocumentTypes",
-                columns: new[] { "Id", "Category", "CreatedAt", "Description", "FileExtensions", "IsActive", "Keywords", "Name", "Priority", "ProcessingRules", "UpdatedAt" },
+                schema: "dps_dbo",
+                table: "documenttypes",
+                columns: new[] { "id", "category", "createdat", "description", "fileextensions", "isactive", "keywords", "name", "priority", "processingrules", "updatedat" },
                 values: new object[,]
                 {
                     { new Guid("11111111-1111-1111-1111-111111111111"), "Financial", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Commercial invoice documents", ".pdf,.doc,.docx", true, null, "Invoice", 1, null, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc) },
@@ -178,110 +192,135 @@ namespace DocumentProcessor.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_Classifications_ClassifiedAt",
-                table: "Classifications",
-                column: "ClassifiedAt");
+                name: "IX_classifications_classifiedat",
+                schema: "dps_dbo",
+                table: "classifications",
+                column: "classifiedat");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Classifications_ConfidenceScore",
-                table: "Classifications",
-                column: "ConfidenceScore");
+                name: "IX_classifications_confidencescore",
+                schema: "dps_dbo",
+                table: "classifications",
+                column: "confidencescore");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Classifications_DocumentId_DocumentTypeId",
-                table: "Classifications",
-                columns: new[] { "DocumentId", "DocumentTypeId" });
+                name: "IX_classifications_documentid_documenttypeid",
+                schema: "dps_dbo",
+                table: "classifications",
+                columns: new[] { "documentid", "documenttypeid" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_Classifications_DocumentTypeId",
-                table: "Classifications",
-                column: "DocumentTypeId");
+                name: "IX_classifications_documenttypeid",
+                schema: "dps_dbo",
+                table: "classifications",
+                column: "documenttypeid");
 
             migrationBuilder.CreateIndex(
-                name: "IX_DocumentMetadata_DocumentId",
-                table: "DocumentMetadata",
-                column: "DocumentId",
+                name: "IX_documentmetadata_documentid",
+                schema: "dps_dbo",
+                table: "documentmetadata",
+                column: "documentid",
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_Documents_DocumentTypeId",
-                table: "Documents",
-                column: "DocumentTypeId");
+                name: "IX_documents_documenttypeid",
+                schema: "dps_dbo",
+                table: "documents",
+                column: "documenttypeid");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Documents_IsDeleted",
-                table: "Documents",
-                column: "IsDeleted");
+                name: "IX_documents_isdeleted",
+                schema: "dps_dbo",
+                table: "documents",
+                column: "isdeleted");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Documents_Status",
-                table: "Documents",
-                column: "Status");
+                name: "IX_documents_status",
+                schema: "dps_dbo",
+                table: "documents",
+                column: "status");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Documents_UploadedAt",
-                table: "Documents",
-                column: "UploadedAt");
+                name: "IX_documents_uploadedat",
+                schema: "dps_dbo",
+                table: "documents",
+                column: "uploadedat");
 
             migrationBuilder.CreateIndex(
-                name: "IX_DocumentTypes_Category",
-                table: "DocumentTypes",
-                column: "Category");
+                name: "IX_documenttypes_category",
+                schema: "dps_dbo",
+                table: "documenttypes",
+                column: "category");
 
             migrationBuilder.CreateIndex(
-                name: "IX_DocumentTypes_IsActive",
-                table: "DocumentTypes",
-                column: "IsActive");
+                name: "IX_documenttypes_isactive",
+                schema: "dps_dbo",
+                table: "documenttypes",
+                column: "isactive");
 
             migrationBuilder.CreateIndex(
-                name: "IX_DocumentTypes_Name",
-                table: "DocumentTypes",
-                column: "Name",
+                name: "IX_documenttypes_name",
+                schema: "dps_dbo",
+                table: "documenttypes",
+                column: "name",
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_ProcessingQueues_CreatedAt",
-                table: "ProcessingQueues",
-                column: "CreatedAt");
+                name: "IX_processingqueues_createdat",
+                schema: "dps_dbo",
+                table: "processingqueues",
+                column: "createdat");
 
             migrationBuilder.CreateIndex(
-                name: "IX_ProcessingQueues_DocumentId",
-                table: "ProcessingQueues",
-                column: "DocumentId");
+                name: "IX_processingqueues_documentid",
+                schema: "dps_dbo",
+                table: "processingqueues",
+                column: "documentid");
 
             migrationBuilder.CreateIndex(
-                name: "IX_ProcessingQueues_Priority",
-                table: "ProcessingQueues",
-                column: "Priority");
+                name: "IX_processingqueues_priority",
+                schema: "dps_dbo",
+                table: "processingqueues",
+                column: "priority");
 
             migrationBuilder.CreateIndex(
-                name: "IX_ProcessingQueues_Status",
-                table: "ProcessingQueues",
-                column: "Status");
+                name: "IX_processingqueues_status",
+                schema: "dps_dbo",
+                table: "processingqueues",
+                column: "status");
 
             migrationBuilder.CreateIndex(
-                name: "IX_ProcessingQueues_Status_Priority",
-                table: "ProcessingQueues",
-                columns: new[] { "Status", "Priority" });
+                name: "IX_processingqueues_status_priority",
+                schema: "dps_dbo",
+                table: "processingqueues",
+                columns: new[] { "status", "priority" });
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "Classifications");
+                name: "classifications",
+                schema: "dps_dbo");
 
             migrationBuilder.DropTable(
-                name: "DocumentMetadata");
+                name: "documentmetadata",
+                schema: "dps_dbo");
 
             migrationBuilder.DropTable(
-                name: "ProcessingQueues");
+                name: "processingqueues",
+                schema: "dps_dbo");
 
             migrationBuilder.DropTable(
-                name: "Documents");
+                name: "documents",
+                schema: "dps_dbo");
 
             migrationBuilder.DropTable(
-                name: "DocumentTypes");
+                name: "documenttypes",
+                schema: "dps_dbo");
+                
+            migrationBuilder.DropSchema(
+                name: "dps_dbo");
         }
     }
 }

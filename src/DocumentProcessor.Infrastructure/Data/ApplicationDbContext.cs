@@ -1,7 +1,8 @@
-using System;
+﻿using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using DocumentProcessor.Core.Entities;
+using Npgsql;
 
 namespace DocumentProcessor.Infrastructure.Data
 {
@@ -20,6 +21,9 @@ namespace DocumentProcessor.Infrastructure.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            // Set the default schema for all entities
+            modelBuilder.HasDefaultSchema("dps_dbo");
+
             // Configure Document entity
             modelBuilder.Entity<Document>(entity =>
             {
@@ -32,6 +36,9 @@ namespace DocumentProcessor.Infrastructure.Data
                 entity.Property(e => e.S3Key).HasMaxLength(500);
                 entity.Property(e => e.S3Bucket).HasMaxLength(255);
                 entity.Property(e => e.UploadedBy).IsRequired().HasMaxLength(255);
+                
+                // Convert bool to int for IsDeleted if needed (PostgreSQL uses native boolean)
+                entity.Property(e => e.IsDeleted).HasConversion<bool>();
                 
                 entity.HasIndex(e => e.Status);
                 entity.HasIndex(e => e.DocumentTypeId);
@@ -58,6 +65,9 @@ namespace DocumentProcessor.Infrastructure.Data
                 entity.Property(e => e.FileExtensions).HasMaxLength(500);
                 entity.Property(e => e.Keywords).HasMaxLength(2000);
                 
+                // Convert bool to int for IsActive if needed (PostgreSQL uses native boolean)
+                entity.Property(e => e.IsActive).HasConversion<bool>();
+                
                 entity.HasIndex(e => e.Name).IsUnique();
                 entity.HasIndex(e => e.Category);
                 entity.HasIndex(e => e.IsActive);
@@ -68,6 +78,9 @@ namespace DocumentProcessor.Infrastructure.Data
             {
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.AIModelUsed).HasMaxLength(100);
+                
+                // Convert bool to int for IsManuallyVerified if needed (PostgreSQL uses native boolean)
+                entity.Property(e => e.IsManuallyVerified).HasConversion<bool>();
 
                 entity.HasIndex(e => new { e.DocumentId, e.DocumentTypeId });
                 entity.HasIndex(e => e.ConfidenceScore);
@@ -112,18 +125,49 @@ namespace DocumentProcessor.Infrastructure.Data
                 entity.Property(e => e.Keywords).HasMaxLength(2000);
                 entity.Property(e => e.Language).HasMaxLength(10);
                 
-                // Configure Tags as a simple string property (EF Core 8 compatible)
-                // Convert Dictionary to/from JSON manually in the application layer if needed
+                // Use PostgreSQL's JSONB type for CustomMetadata
+                entity.Property(e => e.CustomMetadata).HasColumnType("jsonb");
                 
                 entity.HasIndex(e => e.DocumentId).IsUnique();
             });
 
-            // Configure table names
-            modelBuilder.Entity<Document>().ToTable("Documents");
-            modelBuilder.Entity<DocumentType>().ToTable("DocumentTypes");
-            modelBuilder.Entity<Classification>().ToTable("Classifications");
-            modelBuilder.Entity<ProcessingQueue>().ToTable("ProcessingQueues");
-            modelBuilder.Entity<DocumentMetadata>().ToTable("DocumentMetadata");
+            // Configure table names with PostgreSQL schema and lowercase column names
+            modelBuilder.Entity<Document>().ToTable("documents", "dps_dbo");
+            modelBuilder.Entity<DocumentType>().ToTable("documenttypes", "dps_dbo");
+            modelBuilder.Entity<Classification>().ToTable("classifications", "dps_dbo");
+            modelBuilder.Entity<ProcessingQueue>().ToTable("processingqueues", "dps_dbo");
+            modelBuilder.Entity<DocumentMetadata>().ToTable("documentmetadata", "dps_dbo");
+
+            // Use snake_case naming convention for PostgreSQL
+            foreach (var entity in modelBuilder.Model.GetEntityTypes())
+            {
+                // Replace table names
+                entity.SetTableName(entity.GetTableName().ToLower());
+                
+                // Replace column names
+                foreach (var property in entity.GetProperties())
+                {
+                    property.SetColumnName(property.GetColumnName().ToLower());
+                }
+
+                // Replace keys names
+                foreach (var key in entity.GetKeys())
+                {
+                    key.SetName(key.GetName().ToLower());
+                }
+
+                // Replace foreign keys names
+                foreach (var key in entity.GetForeignKeys())
+                {
+                    key.SetConstraintName(key.GetConstraintName().ToLower());
+                }
+
+                // Replace index names
+                foreach (var index in entity.GetIndexes())
+                {
+                    index.SetDatabaseName(index.GetDatabaseName().ToLower());
+                }
+            }
 
             // Seed initial document types
             var seedDate = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -208,47 +252,49 @@ namespace DocumentProcessor.Infrastructure.Data
             var entries = ChangeTracker.Entries()
                 .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified);
 
+            var utcNow = DateTime.UtcNow;
+            
             foreach (var entry in entries)
             {
                 if (entry.Entity is Document document)
                 {
                     if (entry.State == EntityState.Added)
                     {
-                        document.CreatedAt = DateTime.UtcNow;
+                        document.CreatedAt = utcNow;
                     }
-                    document.UpdatedAt = DateTime.UtcNow;
+                    document.UpdatedAt = utcNow;
                 }
                 else if (entry.Entity is DocumentType documentType)
                 {
                     if (entry.State == EntityState.Added)
                     {
-                        documentType.CreatedAt = DateTime.UtcNow;
+                        documentType.CreatedAt = utcNow;
                     }
-                    documentType.UpdatedAt = DateTime.UtcNow;
+                    documentType.UpdatedAt = utcNow;
                 }
                 else if (entry.Entity is Classification classification)
                 {
                     if (entry.State == EntityState.Added)
                     {
-                        classification.CreatedAt = DateTime.UtcNow;
+                        classification.CreatedAt = utcNow;
                     }
-                    classification.UpdatedAt = DateTime.UtcNow;
+                    classification.UpdatedAt = utcNow;
                 }
                 else if (entry.Entity is ProcessingQueue queue)
                 {
                     if (entry.State == EntityState.Added)
                     {
-                        queue.CreatedAt = DateTime.UtcNow;
+                        queue.CreatedAt = utcNow;
                     }
-                    queue.UpdatedAt = DateTime.UtcNow;
+                    queue.UpdatedAt = utcNow;
                 }
                 else if (entry.Entity is DocumentMetadata metadata)
                 {
                     if (entry.State == EntityState.Added)
                     {
-                        metadata.CreatedAt = DateTime.UtcNow;
+                        metadata.CreatedAt = utcNow;
                     }
-                    metadata.UpdatedAt = DateTime.UtcNow;
+                    metadata.UpdatedAt = utcNow;
                 }
             }
         }

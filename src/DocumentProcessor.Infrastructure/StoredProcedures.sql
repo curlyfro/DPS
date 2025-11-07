@@ -1,423 +1,735 @@
--- Stored Procedures for Document Processing System
+﻿-- Stored Procedures for Document Processing System
 -- These stored procedures replace Entity Framework DbSet queries in DocumentRepository
+-- PostgreSQL version
 
 -- 1. Get Document by ID with all related data
-CREATE OR ALTER PROCEDURE dbo.GetDocumentById
-    @DocumentId UNIQUEIDENTIFIER
-AS
+CREATE OR REPLACE FUNCTION dps_dbo.get_document_by_id(
+    document_id UUID
+) RETURNS TABLE (
+    id UUID,
+    filename TEXT,
+    originalfilename TEXT,
+    fileextension TEXT,
+    filesize BIGINT,
+    contenttype TEXT,
+    storagepath TEXT,
+    s3key TEXT,
+    s3bucket TEXT,
+    source TEXT,
+    status INT,
+    documenttypeid UUID,
+    extractedtext TEXT,
+    summary TEXT,
+    uploadedat TIMESTAMP,
+    processedat TIMESTAMP,
+    uploadedby TEXT,
+    createdat TIMESTAMP,
+    updatedat TIMESTAMP,
+    isdeleted BOOLEAN,
+    deletedat TIMESTAMP,
+    -- Document Type
+    documenttype_id UUID,
+    documenttype_name TEXT,
+    documenttype_description TEXT,
+    documenttype_isactive BOOLEAN,
+    documenttype_createdat TIMESTAMP,
+    documenttype_updatedat TIMESTAMP,
+    -- Metadata
+    metadata_id UUID,
+    metadata_documentid UUID,
+    metadata_author TEXT,
+    metadata_title TEXT,
+    metadata_subject TEXT,
+    metadata_keywords TEXT,
+    metadata_creationdate TIMESTAMP,
+    metadata_modificationdate TIMESTAMP,
+    metadata_pagecount INT,
+    metadata_wordcount INT,
+    metadata_language TEXT,
+    metadata_custommetadata JSONB,
+    metadata_tags TEXT,
+    metadata_createdat TIMESTAMP,
+    metadata_updatedat TIMESTAMP,
+    -- Classifications
+    classification_id UUID,
+    classification_documentid UUID,
+    classification_documenttypeid UUID,
+    classification_confidencescore FLOAT,
+    classification_method TEXT,
+    classification_aimodelused TEXT,
+    classification_airesponse TEXT,
+    classification_extractedintents TEXT,
+    classification_extractedentities TEXT,
+    classification_ismanuallyverified BOOLEAN,
+    classification_verifiedby TEXT,
+    classification_verifiedat TIMESTAMP,
+    classification_classifiedat TIMESTAMP,
+    classification_createdat TIMESTAMP,
+    classification_updatedat TIMESTAMP,
+    -- Classification Document Type
+    classificationdocumenttype_id UUID,
+    classificationdocumenttype_name TEXT,
+    classificationdocumenttype_description TEXT,
+    classificationdocumenttype_isactive BOOLEAN,
+    classificationdocumenttype_createdat TIMESTAMP,
+    classificationdocumenttype_updatedat TIMESTAMP,
+    -- Processing Queue Items
+    processingqueue_id UUID,
+    processingqueue_documentid UUID,
+    processingqueue_processingtype TEXT,
+    processingqueue_status INT,
+    processingqueue_priority INT,
+    processingqueue_retrycount INT,
+    processingqueue_maxretries INT,
+    processingqueue_startedat TIMESTAMP,
+    processingqueue_completedat TIMESTAMP,
+    processingqueue_errormessage TEXT,
+    processingqueue_errordetails TEXT,
+    processingqueue_processorid TEXT,
+    processingqueue_resultdata TEXT,
+    processingqueue_nextretryat TIMESTAMP,
+    processingqueue_createdat TIMESTAMP,
+    processingqueue_updatedat TIMESTAMP
+) AS $$
 BEGIN
-    SET NOCOUNT ON;
-    
+    RETURN QUERY
     SELECT 
-        d.Id,
-        d.FileName,
-        d.OriginalFileName,
-        d.FileExtension,
-        d.FileSize,
-        d.ContentType,
-        d.StoragePath,
-        d.S3Key,
-        d.S3Bucket,
-        d.Source,
-        d.Status,
-        d.DocumentTypeId,
-        d.ExtractedText,
-        d.Summary,
-        d.UploadedAt,
-        d.ProcessedAt,
-        d.UploadedBy,
-        d.CreatedAt,
-        d.UpdatedAt,
-        d.IsDeleted,
-        d.DeletedAt,
+        d.id,
+        d.filename,
+        d.originalfilename,
+        d.fileextension,
+        d.filesize,
+        d.contenttype,
+        d.storagepath,
+        d.s3key,
+        d.s3bucket,
+        d.source,
+        d.status,
+        d.documenttypeid,
+        d.extractedtext,
+        d.summary,
+        d.uploadedat,
+        d.processedat,
+        d.uploadedby,
+        d.createdat,
+        d.updatedat,
+        d.isdeleted,
+        d.deletedat,
         
         -- Document Type
-        dt.Id AS DocumentType_Id,
-        dt.Name AS DocumentType_Name,
-        dt.Description AS DocumentType_Description,
-        dt.IsActive AS DocumentType_IsActive,
-        dt.CreatedAt AS DocumentType_CreatedAt,
-        dt.UpdatedAt AS DocumentType_UpdatedAt,
+        dt.id,
+        dt.name,
+        dt.description,
+        dt.isactive,
+        dt.createdat,
+        dt.updatedat,
         
         -- Metadata
-        dm.Id AS Metadata_Id,
-        dm.DocumentId AS Metadata_DocumentId,
-        dm.Author AS Metadata_Author,
-        dm.Title AS Metadata_Title,
-        dm.Subject AS Metadata_Subject,
-        dm.Keywords AS Metadata_Keywords,
-        dm.CreationDate AS Metadata_CreationDate,
-        dm.ModificationDate AS Metadata_ModificationDate,
-        dm.PageCount AS Metadata_PageCount,
-        dm.WordCount AS Metadata_WordCount,
-        dm.Language AS Metadata_Language,
-        dm.CustomMetadata AS Metadata_CustomMetadata,
-        dm.Tags AS Metadata_Tags,
-        dm.CreatedAt AS Metadata_CreatedAt,
-        dm.UpdatedAt AS Metadata_UpdatedAt,
+        dm.id,
+        dm.documentid,
+        dm.author,
+        dm.title,
+        dm.subject,
+        dm.keywords,
+        dm.creationdate,
+        dm.modificationdate,
+        dm.pagecount,
+        dm.wordcount,
+        dm.language,
+        dm.custommetadata::jsonb,
+        dm.tags,
+        dm.createdat,
+        dm.updatedat,
         
         -- Classifications
-        c.Id AS Classification_Id,
-        c.DocumentId AS Classification_DocumentId,
-        c.DocumentTypeId AS Classification_DocumentTypeId,
-        c.ConfidenceScore AS Classification_ConfidenceScore,
-        c.Method AS Classification_Method,
-        c.AIModelUsed AS Classification_AIModelUsed,
-        c.AIResponse AS Classification_AIResponse,
-        c.ExtractedIntents AS Classification_ExtractedIntents,
-        c.ExtractedEntities AS Classification_ExtractedEntities,
-        c.IsManuallyVerified AS Classification_IsManuallyVerified,
-        c.VerifiedBy AS Classification_VerifiedBy,
-        c.VerifiedAt AS Classification_VerifiedAt,
-        c.ClassifiedAt AS Classification_ClassifiedAt,
-        c.CreatedAt AS Classification_CreatedAt,
-        c.UpdatedAt AS Classification_UpdatedAt,
+        c.id,
+        c.documentid,
+        c.documenttypeid,
+        c.confidencescore,
+        c.method,
+        c.aimodelused,
+        c.airesponse,
+        c.extractedintents,
+        c.extractedentities,
+        c.ismanuallyverified,
+        c.verifiedby,
+        c.verifiedat,
+        c.classifiedat,
+        c.createdat,
+        c.updatedat,
         
         -- Classification Document Type
-        cdt.Id AS ClassificationDocumentType_Id,
-        cdt.Name AS ClassificationDocumentType_Name,
-        cdt.Description AS ClassificationDocumentType_Description,
-        cdt.IsActive AS ClassificationDocumentType_IsActive,
-        cdt.CreatedAt AS ClassificationDocumentType_CreatedAt,
-        cdt.UpdatedAt AS ClassificationDocumentType_UpdatedAt,
+        cdt.id,
+        cdt.name,
+        cdt.description,
+        cdt.isactive,
+        cdt.createdat,
+        cdt.updatedat,
         
         -- Processing Queue Items
-        pq.Id AS ProcessingQueue_Id,
-        pq.DocumentId AS ProcessingQueue_DocumentId,
-        pq.ProcessingType AS ProcessingQueue_ProcessingType,
-        pq.Status AS ProcessingQueue_Status,
-        pq.Priority AS ProcessingQueue_Priority,
-        pq.RetryCount AS ProcessingQueue_RetryCount,
-        pq.MaxRetries AS ProcessingQueue_MaxRetries,
-        pq.StartedAt AS ProcessingQueue_StartedAt,
-        pq.CompletedAt AS ProcessingQueue_CompletedAt,
-        pq.ErrorMessage AS ProcessingQueue_ErrorMessage,
-        pq.ErrorDetails AS ProcessingQueue_ErrorDetails,
-        pq.ProcessorId AS ProcessingQueue_ProcessorId,
-        pq.ResultData AS ProcessingQueue_ResultData,
-        pq.NextRetryAt AS ProcessingQueue_NextRetryAt,
-        pq.CreatedAt AS ProcessingQueue_CreatedAt,
-        pq.UpdatedAt AS ProcessingQueue_UpdatedAt
+        pq.id,
+        pq.documentid,
+        pq.processingtype,
+        pq.status,
+        pq.priority,
+        pq.retrycount,
+        pq.maxretries,
+        pq.startedat,
+        pq.completedat,
+        pq.errormessage,
+        pq.errordetails,
+        pq.processorid,
+        pq.resultdata,
+        pq.nextretryat,
+        pq.createdat,
+        pq.updatedat
         
-    FROM Documents d
-    LEFT JOIN DocumentTypes dt ON d.DocumentTypeId = dt.Id
-    LEFT JOIN DocumentMetadata dm ON d.Id = dm.DocumentId
-    LEFT JOIN Classifications c ON d.Id = c.DocumentId
-    LEFT JOIN DocumentTypes cdt ON c.DocumentTypeId = cdt.Id
-    LEFT JOIN ProcessingQueues pq ON d.Id = pq.DocumentId
-    WHERE d.Id = @DocumentId;
+    FROM dps_dbo.documents d
+    LEFT JOIN dps_dbo.documenttypes dt ON d.documenttypeid = dt.id
+    LEFT JOIN dps_dbo.documentmetadata dm ON d.id = dm.documentid
+    LEFT JOIN dps_dbo.classifications c ON d.id = c.documentid
+    LEFT JOIN dps_dbo.documenttypes cdt ON c.documenttypeid = cdt.id
+    LEFT JOIN dps_dbo.processingqueues pq ON d.id = pq.documentid
+    WHERE d.id = document_id;
 END;
+$$ LANGUAGE plpgsql;
 
 -- 2. Get All Documents with related data
-CREATE OR ALTER PROCEDURE dbo.GetAllDocuments
-AS
+CREATE OR REPLACE FUNCTION dps_dbo.get_all_documents()
+RETURNS TABLE (
+    id UUID,
+    filename TEXT,
+    originalfilename TEXT,
+    fileextension TEXT,
+    filesize BIGINT,
+    contenttype TEXT,
+    storagepath TEXT,
+    s3key TEXT,
+    s3bucket TEXT,
+    source TEXT,
+    status INT,
+    documenttypeid UUID,
+    extractedtext TEXT,
+    summary TEXT,
+    uploadedat TIMESTAMP,
+    processedat TIMESTAMP,
+    uploadedby TEXT,
+    createdat TIMESTAMP,
+    updatedat TIMESTAMP,
+    isdeleted BOOLEAN,
+    deletedat TIMESTAMP,
+    -- Document Type
+    documenttype_id UUID,
+    documenttype_name TEXT,
+    documenttype_description TEXT,
+    documenttype_isactive BOOLEAN,
+    documenttype_createdat TIMESTAMP,
+    documenttype_updatedat TIMESTAMP,
+    -- Metadata
+    metadata_id UUID,
+    metadata_documentid UUID,
+    metadata_author TEXT,
+    metadata_title TEXT,
+    metadata_subject TEXT,
+    metadata_keywords TEXT,
+    metadata_creationdate TIMESTAMP,
+    metadata_modificationdate TIMESTAMP,
+    metadata_pagecount INT,
+    metadata_wordcount INT,
+    metadata_language TEXT,
+    metadata_custommetadata JSONB,
+    metadata_tags TEXT,
+    metadata_createdat TIMESTAMP,
+    metadata_updatedat TIMESTAMP,
+    -- Classifications
+    classification_id UUID,
+    classification_documentid UUID,
+    classification_documenttypeid UUID,
+    classification_confidencescore FLOAT,
+    classification_method TEXT,
+    classification_aimodelused TEXT,
+    classification_airesponse TEXT,
+    classification_extractedintents TEXT,
+    classification_extractedentities TEXT,
+    classification_ismanuallyverified BOOLEAN,
+    classification_verifiedby TEXT,
+    classification_verifiedat TIMESTAMP,
+    classification_classifiedat TIMESTAMP,
+    classification_createdat TIMESTAMP,
+    classification_updatedat TIMESTAMP,
+    -- Classification Document Type
+    classificationdocumenttype_id UUID,
+    classificationdocumenttype_name TEXT,
+    classificationdocumenttype_description TEXT,
+    classificationdocumenttype_isactive BOOLEAN,
+    classificationdocumenttype_createdat TIMESTAMP,
+    classificationdocumenttype_updatedat TIMESTAMP,
+    -- Processing Queue Items
+    processingqueue_id UUID,
+    processingqueue_documentid UUID,
+    processingqueue_processingtype TEXT,
+    processingqueue_status INT,
+    processingqueue_priority INT,
+    processingqueue_retrycount INT,
+    processingqueue_maxretries INT,
+    processingqueue_startedat TIMESTAMP,
+    processingqueue_completedat TIMESTAMP,
+    processingqueue_errormessage TEXT,
+    processingqueue_errordetails TEXT,
+    processingqueue_processorid TEXT,
+    processingqueue_resultdata TEXT,
+    processingqueue_nextretryat TIMESTAMP,
+    processingqueue_createdat TIMESTAMP,
+    processingqueue_updatedat TIMESTAMP
+) AS $$
 BEGIN
-    SET NOCOUNT ON;
-    
+    RETURN QUERY
     SELECT 
-        d.Id,
-        d.FileName,
-        d.OriginalFileName,
-        d.FileExtension,
-        d.FileSize,
-        d.ContentType,
-        d.StoragePath,
-        d.S3Key,
-        d.S3Bucket,
-        d.Source,
-        d.Status,
-        d.DocumentTypeId,
-        d.ExtractedText,
-        d.Summary,
-        d.UploadedAt,
-        d.ProcessedAt,
-        d.UploadedBy,
-        d.CreatedAt,
-        d.UpdatedAt,
-        d.IsDeleted,
-        d.DeletedAt,
+        d.id,
+        d.filename,
+        d.originalfilename,
+        d.fileextension,
+        d.filesize,
+        d.contenttype,
+        d.storagepath,
+        d.s3key,
+        d.s3bucket,
+        d.source,
+        d.status,
+        d.documenttypeid,
+        d.extractedtext,
+        d.summary,
+        d.uploadedat,
+        d.processedat,
+        d.uploadedby,
+        d.createdat,
+        d.updatedat,
+        d.isdeleted,
+        d.deletedat,
         
         -- Document Type
-        dt.Id AS DocumentType_Id,
-        dt.Name AS DocumentType_Name,
-        dt.Description AS DocumentType_Description,
-        dt.IsActive AS DocumentType_IsActive,
-        dt.CreatedAt AS DocumentType_CreatedAt,
-        dt.UpdatedAt AS DocumentType_UpdatedAt,
+        dt.id,
+        dt.name,
+        dt.description,
+        dt.isactive,
+        dt.createdat,
+        dt.updatedat,
         
         -- Metadata
-        dm.Id AS Metadata_Id,
-        dm.DocumentId AS Metadata_DocumentId,
-        dm.Author AS Metadata_Author,
-        dm.Title AS Metadata_Title,
-        dm.Subject AS Metadata_Subject,
-        dm.Keywords AS Metadata_Keywords,
-        dm.CreationDate AS Metadata_CreationDate,
-        dm.ModificationDate AS Metadata_ModificationDate,
-        dm.PageCount AS Metadata_PageCount,
-        dm.WordCount AS Metadata_WordCount,
-        dm.Language AS Metadata_Language,
-        dm.CustomMetadata AS Metadata_CustomMetadata,
-        dm.Tags AS Metadata_Tags,
-        dm.CreatedAt AS Metadata_CreatedAt,
-        dm.UpdatedAt AS Metadata_UpdatedAt,
+        dm.id,
+        dm.documentid,
+        dm.author,
+        dm.title,
+        dm.subject,
+        dm.keywords,
+        dm.creationdate,
+        dm.modificationdate,
+        dm.pagecount,
+        dm.wordcount,
+        dm.language,
+        dm.custommetadata::jsonb,
+        dm.tags,
+        dm.createdat,
+        dm.updatedat,
         
         -- Classifications
-        c.Id AS Classification_Id,
-        c.DocumentId AS Classification_DocumentId,
-        c.DocumentTypeId AS Classification_DocumentTypeId,
-        c.ConfidenceScore AS Classification_ConfidenceScore,
-        c.Method AS Classification_Method,
-        c.AIModelUsed AS Classification_AIModelUsed,
-        c.AIResponse AS Classification_AIResponse,
-        c.ExtractedIntents AS Classification_ExtractedIntents,
-        c.ExtractedEntities AS Classification_ExtractedEntities,
-        c.IsManuallyVerified AS Classification_IsManuallyVerified,
-        c.VerifiedBy AS Classification_VerifiedBy,
-        c.VerifiedAt AS Classification_VerifiedAt,
-        c.ClassifiedAt AS Classification_ClassifiedAt,
-        c.CreatedAt AS Classification_CreatedAt,
-        c.UpdatedAt AS Classification_UpdatedAt,
+        c.id,
+        c.documentid,
+        c.documenttypeid,
+        c.confidencescore,
+        c.method,
+        c.aimodelused,
+        c.airesponse,
+        c.extractedintents,
+        c.extractedentities,
+        c.ismanuallyverified,
+        c.verifiedby,
+        c.verifiedat,
+        c.classifiedat,
+        c.createdat,
+        c.updatedat,
         
         -- Classification Document Type
-        cdt.Id AS ClassificationDocumentType_Id,
-        cdt.Name AS ClassificationDocumentType_Name,
-        cdt.Description AS ClassificationDocumentType_Description,
-        cdt.IsActive AS ClassificationDocumentType_IsActive,
-        cdt.CreatedAt AS ClassificationDocumentType_CreatedAt,
-        cdt.UpdatedAt AS ClassificationDocumentType_UpdatedAt,
+        cdt.id,
+        cdt.name,
+        cdt.description,
+        cdt.isactive,
+        cdt.createdat,
+        cdt.updatedat,
         
         -- Processing Queue Items
-        pq.Id AS ProcessingQueue_Id,
-        pq.DocumentId AS ProcessingQueue_DocumentId,
-        pq.ProcessingType AS ProcessingQueue_ProcessingType,
-        pq.Status AS ProcessingQueue_Status,
-        pq.Priority AS ProcessingQueue_Priority,
-        pq.RetryCount AS ProcessingQueue_RetryCount,
-        pq.MaxRetries AS ProcessingQueue_MaxRetries,
-        pq.StartedAt AS ProcessingQueue_StartedAt,
-        pq.CompletedAt AS ProcessingQueue_CompletedAt,
-        pq.ErrorMessage AS ProcessingQueue_ErrorMessage,
-        pq.ErrorDetails AS ProcessingQueue_ErrorDetails,
-        pq.ProcessorId AS ProcessingQueue_ProcessorId,
-        pq.ResultData AS ProcessingQueue_ResultData,
-        pq.NextRetryAt AS ProcessingQueue_NextRetryAt,
-        pq.CreatedAt AS ProcessingQueue_CreatedAt,
-        pq.UpdatedAt AS ProcessingQueue_UpdatedAt
+        pq.id,
+        pq.documentid,
+        pq.processingtype,
+        pq.status,
+        pq.priority,
+        pq.retrycount,
+        pq.maxretries,
+        pq.startedat,
+        pq.completedat,
+        pq.errormessage,
+        pq.errordetails,
+        pq.processorid,
+        pq.resultdata,
+        pq.nextretryat,
+        pq.createdat,
+        pq.updatedat
         
-    FROM Documents d
-    LEFT JOIN DocumentTypes dt ON d.DocumentTypeId = dt.Id
-    LEFT JOIN DocumentMetadata dm ON d.Id = dm.DocumentId
-    LEFT JOIN Classifications c ON d.Id = c.DocumentId
-    LEFT JOIN DocumentTypes cdt ON c.DocumentTypeId = cdt.Id
-    LEFT JOIN ProcessingQueues pq ON d.Id = pq.DocumentId
-    ORDER BY d.UploadedAt DESC;
+    FROM dps_dbo.documents d
+    LEFT JOIN dps_dbo.documenttypes dt ON d.documenttypeid = dt.id
+    LEFT JOIN dps_dbo.documentmetadata dm ON d.id = dm.documentid
+    LEFT JOIN dps_dbo.classifications c ON d.id = c.documentid
+    LEFT JOIN dps_dbo.documenttypes cdt ON c.documenttypeid = cdt.id
+    LEFT JOIN dps_dbo.processingqueues pq ON d.id = pq.documentid
+    ORDER BY d.uploadedat DESC;
 END;
+$$ LANGUAGE plpgsql;
 
 -- 3. Get Documents by User with related data
-CREATE OR ALTER PROCEDURE dbo.GetDocumentsByUser
-    @UserId NVARCHAR(450)
-AS
+CREATE OR REPLACE FUNCTION dps_dbo.get_documents_by_user(
+    user_id TEXT
+) RETURNS TABLE (
+    id UUID,
+    filename TEXT,
+    originalfilename TEXT,
+    fileextension TEXT,
+    filesize BIGINT,
+    contenttype TEXT,
+    storagepath TEXT,
+    s3key TEXT,
+    s3bucket TEXT,
+    source TEXT,
+    status INT,
+    documenttypeid UUID,
+    extractedtext TEXT,
+    summary TEXT,
+    uploadedat TIMESTAMP,
+    processedat TIMESTAMP,
+    uploadedby TEXT,
+    createdat TIMESTAMP,
+    updatedat TIMESTAMP,
+    isdeleted BOOLEAN,
+    deletedat TIMESTAMP,
+    -- Document Type
+    documenttype_id UUID,
+    documenttype_name TEXT,
+    documenttype_description TEXT,
+    documenttype_isactive BOOLEAN,
+    documenttype_createdat TIMESTAMP,
+    documenttype_updatedat TIMESTAMP,
+    -- Metadata
+    metadata_id UUID,
+    metadata_documentid UUID,
+    metadata_author TEXT,
+    metadata_title TEXT,
+    metadata_subject TEXT,
+    metadata_keywords TEXT,
+    metadata_creationdate TIMESTAMP,
+    metadata_modificationdate TIMESTAMP,
+    metadata_pagecount INT,
+    metadata_wordcount INT,
+    metadata_language TEXT,
+    metadata_custommetadata JSONB,
+    metadata_tags TEXT,
+    metadata_createdat TIMESTAMP,
+    metadata_updatedat TIMESTAMP
+) AS $$
 BEGIN
-    SET NOCOUNT ON;
-    
+    RETURN QUERY
     SELECT 
-        d.Id,
-        d.FileName,
-        d.OriginalFileName,
-        d.FileExtension,
-        d.FileSize,
-        d.ContentType,
-        d.StoragePath,
-        d.S3Key,
-        d.S3Bucket,
-        d.Source,
-        d.Status,
-        d.DocumentTypeId,
-        d.ExtractedText,
-        d.Summary,
-        d.UploadedAt,
-        d.ProcessedAt,
-        d.UploadedBy,
-        d.CreatedAt,
-        d.UpdatedAt,
-        d.IsDeleted,
-        d.DeletedAt,
+        d.id,
+        d.filename,
+        d.originalfilename,
+        d.fileextension,
+        d.filesize,
+        d.contenttype,
+        d.storagepath,
+        d.s3key,
+        d.s3bucket,
+        d.source,
+        d.status,
+        d.documenttypeid,
+        d.extractedtext,
+        d.summary,
+        d.uploadedat,
+        d.processedat,
+        d.uploadedby,
+        d.createdat,
+        d.updatedat,
+        d.isdeleted,
+        d.deletedat,
         
         -- Document Type
-        dt.Id AS DocumentType_Id,
-        dt.Name AS DocumentType_Name,
-        dt.Description AS DocumentType_Description,
-        dt.IsActive AS DocumentType_IsActive,
-        dt.CreatedAt AS DocumentType_CreatedAt,
-        dt.UpdatedAt AS DocumentType_UpdatedAt,
+        dt.id,
+        dt.name,
+        dt.description,
+        dt.isactive,
+        dt.createdat,
+        dt.updatedat,
         
         -- Metadata
-        dm.Id AS Metadata_Id,
-        dm.DocumentId AS Metadata_DocumentId,
-        dm.Author AS Metadata_Author,
-        dm.Title AS Metadata_Title,
-        dm.Subject AS Metadata_Subject,
-        dm.Keywords AS Metadata_Keywords,
-        dm.CreationDate AS Metadata_CreationDate,
-        dm.ModificationDate AS Metadata_ModificationDate,
-        dm.PageCount AS Metadata_PageCount,
-        dm.WordCount AS Metadata_WordCount,
-        dm.Language AS Metadata_Language,
-        dm.CustomMetadata AS Metadata_CustomMetadata,
-        dm.Tags AS Metadata_Tags,
-        dm.CreatedAt AS Metadata_CreatedAt,
-        dm.UpdatedAt AS Metadata_UpdatedAt
-        
-    FROM Documents d
-    LEFT JOIN DocumentTypes dt ON d.DocumentTypeId = dt.Id
-    LEFT JOIN DocumentMetadata dm ON d.Id = dm.DocumentId
-    WHERE d.UploadedBy = @UserId
-    ORDER BY d.UploadedAt DESC;
+        dm.id,
+        dm.documentid,
+        dm.author,
+        dm.title,
+        dm.subject,
+        dm.keywords,
+        dm.creationdate,
+        dm.modificationdate,
+        dm.pagecount,
+        dm.wordcount,
+        dm.language,
+        dm.custommetadata::jsonb,
+        dm.tags,
+        dm.createdat,
+        dm.updatedat
+    FROM dps_dbo.documents d
+    LEFT JOIN dps_dbo.documenttypes dt ON d.documenttypeid = dt.id
+    LEFT JOIN dps_dbo.documentmetadata dm ON d.id = dm.documentid
+    WHERE d.uploadedby = user_id
+    ORDER BY d.uploadedat DESC;
 END;
+$$ LANGUAGE plpgsql;
 
 -- 4. Get Recent Documents with related data
-CREATE OR ALTER PROCEDURE dbo.GetRecentDocuments
-    @Days INT = 7,
-    @Limit INT = 100
-AS
+CREATE OR REPLACE FUNCTION dps_dbo.get_recent_documents(
+    days INT DEFAULT 7,
+    limit_count INT DEFAULT 100
+) RETURNS TABLE (
+    id UUID,
+    filename TEXT,
+    filepath TEXT,
+    filesize BIGINT,
+    mimetype TEXT,
+    uploadedat TIMESTAMP,
+    uploadedby TEXT,
+    status INT,
+    documenttypeid UUID,
+    isdeleted BOOLEAN,
+    deletedat TIMESTAMP,
+    createdat TIMESTAMP,
+    updatedat TIMESTAMP,
+    -- Document Type
+    documenttype_id UUID,
+    documenttype_name TEXT,
+    documenttype_description TEXT,
+    documenttype_isactive BOOLEAN,
+    documenttype_createdat TIMESTAMP,
+    documenttype_updatedat TIMESTAMP,
+    -- Metadata
+    metadata_id UUID,
+    metadata_documentid UUID,
+    metadata_author TEXT,
+    metadata_title TEXT,
+    metadata_subject TEXT,
+    metadata_keywords TEXT,
+    metadata_creationdate TIMESTAMP,
+    metadata_modificationdate TIMESTAMP,
+    metadata_pagecount INT,
+    metadata_wordcount INT,
+    metadata_language TEXT,
+    metadata_custommetadata JSONB,
+    metadata_tags TEXT,
+    metadata_createdat TIMESTAMP,
+    metadata_updatedat TIMESTAMP
+) AS $$
+DECLARE
+    cutoff_date TIMESTAMP;
 BEGIN
-    SET NOCOUNT ON;
+    cutoff_date := NOW() - (days * INTERVAL '1 day');
     
-    DECLARE @CutoffDate DATETIME2 = DATEADD(DAY, -@Days, GETUTCDATE());
-    
-    SELECT TOP (@Limit)
-        d.Id,
-        d.FileName,
-        d.FilePath,
-        d.FileSize,
-        d.MimeType,
-        d.UploadedAt,
-        d.UploadedBy,
-        d.Status,
-        d.DocumentTypeId,
-        d.IsDeleted,
-        d.DeletedAt,
-        d.CreatedAt,
-        d.UpdatedAt,
+    RETURN QUERY
+    SELECT 
+        d.id,
+        d.filename,
+        d.storagepath AS filepath,
+        d.filesize,
+        d.contenttype AS mimetype,
+        d.uploadedat,
+        d.uploadedby,
+        d.status,
+        d.documenttypeid,
+        d.isdeleted,
+        d.deletedat,
+        d.createdat,
+        d.updatedat,
         
         -- Document Type
-        dt.Id AS DocumentType_Id,
-        dt.Name AS DocumentType_Name,
-        dt.Description AS DocumentType_Description,
-        dt.IsActive AS DocumentType_IsActive,
-        dt.CreatedAt AS DocumentType_CreatedAt,
-        dt.UpdatedAt AS DocumentType_UpdatedAt,
+        dt.id,
+        dt.name,
+        dt.description,
+        dt.isactive,
+        dt.createdat,
+        dt.updatedat,
         
         -- Metadata
-        dm.Id AS Metadata_Id,
-        dm.DocumentId AS Metadata_DocumentId,
-        dm.Author AS Metadata_Author,
-        dm.Title AS Metadata_Title,
-        dm.Subject AS Metadata_Subject,
-        dm.Keywords AS Metadata_Keywords,
-        dm.CreationDate AS Metadata_CreationDate,
-        dm.ModificationDate AS Metadata_ModificationDate,
-        dm.PageCount AS Metadata_PageCount,
-        dm.WordCount AS Metadata_WordCount,
-        dm.Language AS Metadata_Language,
-        dm.CustomMetadata AS Metadata_CustomMetadata,
-        dm.Tags AS Metadata_Tags,
-        dm.CreatedAt AS Metadata_CreatedAt,
-        dm.UpdatedAt AS Metadata_UpdatedAt
-        
-    FROM Documents d
-    LEFT JOIN DocumentTypes dt ON d.DocumentTypeId = dt.Id
-    LEFT JOIN DocumentMetadata dm ON d.Id = dm.DocumentId
-    WHERE d.UploadedAt >= @CutoffDate
-    ORDER BY d.UploadedAt DESC;
+        dm.id,
+        dm.documentid,
+        dm.author,
+        dm.title,
+        dm.subject,
+        dm.keywords,
+        dm.creationdate,
+        dm.modificationdate,
+        dm.pagecount,
+        dm.wordcount,
+        dm.language,
+        dm.custommetadata::jsonb,
+        dm.tags,
+        dm.createdat,
+        dm.updatedat
+    FROM dps_dbo.documents d
+    LEFT JOIN dps_dbo.documenttypes dt ON d.documenttypeid = dt.id
+    LEFT JOIN dps_dbo.documentmetadata dm ON d.id = dm.documentid
+    WHERE d.uploadedat >= cutoff_date
+    ORDER BY d.uploadedat DESC
+    LIMIT limit_count;
 END;
+$$ LANGUAGE plpgsql;
 
 -- 5. Get Paged Documents with related data
-CREATE OR ALTER PROCEDURE dbo.GetPagedDocuments
-    @PageNumber INT = 1,
-    @PageSize INT = 10
-AS
+CREATE OR REPLACE FUNCTION dps_dbo.get_paged_documents(
+    page_number INT DEFAULT 1,
+    page_size INT DEFAULT 10
+) RETURNS TABLE (
+    id UUID,
+    filename TEXT,
+    originalfilename TEXT,
+    fileextension TEXT,
+    filesize BIGINT,
+    contenttype TEXT,
+    storagepath TEXT,
+    s3key TEXT,
+    s3bucket TEXT,
+    source TEXT,
+    status INT,
+    documenttypeid UUID,
+    extractedtext TEXT,
+    summary TEXT,
+    uploadedat TIMESTAMP,
+    processedat TIMESTAMP,
+    uploadedby TEXT,
+    createdat TIMESTAMP,
+    updatedat TIMESTAMP,
+    isdeleted BOOLEAN,
+    deletedat TIMESTAMP,
+    -- Document Type
+    documenttype_id UUID,
+    documenttype_name TEXT,
+    documenttype_description TEXT,
+    documenttype_isactive BOOLEAN,
+    documenttype_createdat TIMESTAMP,
+    documenttype_updatedat TIMESTAMP,
+    -- Metadata
+    metadata_id UUID,
+    metadata_documentid UUID,
+    metadata_author TEXT,
+    metadata_title TEXT,
+    metadata_subject TEXT,
+    metadata_keywords TEXT,
+    metadata_creationdate TIMESTAMP,
+    metadata_modificationdate TIMESTAMP,
+    metadata_pagecount INT,
+    metadata_wordcount INT,
+    metadata_language TEXT,
+    metadata_custommetadata JSONB,
+    metadata_tags TEXT,
+    metadata_createdat TIMESTAMP,
+    metadata_updatedat TIMESTAMP
+) AS $$
+DECLARE
+    offset_val INT;
 BEGIN
-    SET NOCOUNT ON;
+    offset_val := (page_number - 1) * page_size;
     
-    DECLARE @Offset INT = (@PageNumber - 1) * @PageSize;
-    
+    RETURN QUERY
     SELECT 
-        d.Id,
-        d.FileName,
-        d.OriginalFileName,
-        d.FileExtension,
-        d.FileSize,
-        d.ContentType,
-        d.StoragePath,
-        d.S3Key,
-        d.S3Bucket,
-        d.Source,
-        d.Status,
-        d.DocumentTypeId,
-        d.ExtractedText,
-        d.Summary,
-        d.UploadedAt,
-        d.ProcessedAt,
-        d.UploadedBy,
-        d.CreatedAt,
-        d.UpdatedAt,
-        d.IsDeleted,
-        d.DeletedAt,
+        d.id,
+        d.filename,
+        d.originalfilename,
+        d.fileextension,
+        d.filesize,
+        d.contenttype,
+        d.storagepath,
+        d.s3key,
+        d.s3bucket,
+        d.source,
+        d.status,
+        d.documenttypeid,
+        d.extractedtext,
+        d.summary,
+        d.uploadedat,
+        d.processedat,
+        d.uploadedby,
+        d.createdat,
+        d.updatedat,
+        d.isdeleted,
+        d.deletedat,
         
         -- Document Type
-        dt.Id AS DocumentType_Id,
-        dt.Name AS DocumentType_Name,
-        dt.Description AS DocumentType_Description,
-        dt.IsActive AS DocumentType_IsActive,
-        dt.CreatedAt AS DocumentType_CreatedAt,
-        dt.UpdatedAt AS DocumentType_UpdatedAt,
+        dt.id,
+        dt.name,
+        dt.description,
+        dt.isactive,
+        dt.createdat,
+        dt.updatedat,
         
         -- Metadata
-        dm.Id AS Metadata_Id,
-        dm.DocumentId AS Metadata_DocumentId,
-        dm.Author AS Metadata_Author,
-        dm.Title AS Metadata_Title,
-        dm.Subject AS Metadata_Subject,
-        dm.Keywords AS Metadata_Keywords,
-        dm.CreationDate AS Metadata_CreationDate,
-        dm.ModificationDate AS Metadata_ModificationDate,
-        dm.PageCount AS Metadata_PageCount,
-        dm.WordCount AS Metadata_WordCount,
-        dm.Language AS Metadata_Language,
-        dm.CustomMetadata AS Metadata_CustomMetadata,
-        dm.Tags AS Metadata_Tags,
-        dm.CreatedAt AS Metadata_CreatedAt,
-        dm.UpdatedAt AS Metadata_UpdatedAt
-        
-    FROM Documents d
-    LEFT JOIN DocumentTypes dt ON d.DocumentTypeId = dt.Id
-    LEFT JOIN DocumentMetadata dm ON d.Id = dm.DocumentId
-    ORDER BY d.UploadedAt DESC
-    OFFSET @Offset ROWS
-    FETCH NEXT @PageSize ROWS ONLY;
+        dm.id,
+        dm.documentid,
+        dm.author,
+        dm.title,
+        dm.subject,
+        dm.keywords,
+        dm.creationdate,
+        dm.modificationdate,
+        dm.pagecount,
+        dm.wordcount,
+        dm.language,
+        dm.custommetadata::jsonb,
+        dm.tags,
+        dm.createdat,
+        dm.updatedat
+    FROM dps_dbo.documents d
+    LEFT JOIN dps_dbo.documenttypes dt ON d.documenttypeid = dt.id
+    LEFT JOIN dps_dbo.documentmetadata dm ON d.id = dm.documentid
+    ORDER BY d.uploadedat DESC
+    OFFSET offset_val
+    LIMIT page_size;
 END;
+$$ LANGUAGE plpgsql;
 
 -- 6. Get All Document Types
-CREATE OR ALTER PROCEDURE dbo.GetDocumentTypes
-AS
+CREATE OR REPLACE FUNCTION dps_dbo.get_document_types()
+RETURNS TABLE (
+    id UUID,
+    name TEXT,
+    description TEXT,
+    category TEXT,
+    isactive BOOLEAN,
+    priority INT,
+    fileextensions TEXT,
+    keywords TEXT,
+    processingrules TEXT,
+    createdat TIMESTAMP,
+    updatedat TIMESTAMP
+) AS $$
 BEGIN
-    SET NOCOUNT ON;
-    
+    RETURN QUERY
     SELECT 
-        Id,
-        Name,
-        Description,
-        Category,
-        IsActive,
-        Priority,
-        FileExtensions,
-        Keywords,
-        ProcessingRules,
-        CreatedAt,
-        UpdatedAt
-    FROM DocumentTypes
-    WHERE IsActive = 1
-    ORDER BY Name;
+        dt.id,
+        dt.name,
+        dt.description,
+        dt.category,
+        dt.isactive,
+        dt.priority,
+        dt.fileextensions,
+        dt.keywords,
+        dt.processingrules,
+        dt.createdat,
+        dt.updatedat
+    FROM dps_dbo.documenttypes dt
+    WHERE dt.isactive = TRUE
+    ORDER BY dt.name;
 END;
+$$ LANGUAGE plpgsql;
