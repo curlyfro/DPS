@@ -12,25 +12,25 @@ namespace DocumentProcessor.Infrastructure.AI
 
         /// <summary>
         /// Model ID for document classification
-        /// Default: Claude 3 Haiku for cost-effectiveness
+        /// Default: Anthropic Haiku model for cost-effectiveness
         /// </summary>
         public string ClassificationModelId { get; set; } = "anthropic.claude-3-haiku-20240307-v1:0";
 
         /// <summary>
         /// Model ID for entity extraction
-        /// Default: Claude 3 Sonnet for better accuracy
+        /// Default: Anthropic Sonnet model for better accuracy
         /// </summary>
         public string ExtractionModelId { get; set; } = "anthropic.claude-3-sonnet-20240229-v1:0";
 
         /// <summary>
         /// Model ID for document summarization
-        /// Default: Claude 3 Haiku for cost-effectiveness
+        /// Default: Anthropic Haiku model for cost-effectiveness
         /// </summary>
         public string SummarizationModelId { get; set; } = "anthropic.claude-3-haiku-20240307-v1:0";
 
         /// <summary>
         /// Model ID for intent detection
-        /// Default: Claude 3 Haiku for quick response
+        /// Default: Anthropic Haiku model for quick response
         /// </summary>
         public string IntentModelId { get; set; } = "anthropic.claude-3-haiku-20240307-v1:0";
 

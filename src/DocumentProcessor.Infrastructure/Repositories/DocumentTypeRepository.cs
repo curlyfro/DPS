@@ -31,10 +31,10 @@ namespace DocumentProcessor.Infrastructure.Repositories
 
         public new async Task<IEnumerable<DocumentType>> GetAllAsync()
         {
-            var documentTypeDtos = await _context.Database.SqlQueryRaw<DocumentTypeDto>(
-                "EXEC dbo.GetDocumentTypes").ToListAsync();
-            
-            return documentTypeDtos.Select(dto => dto.ToDocumentType()).ToList();
+            return await _dbSet
+                .Where(dt => dt.IsActive)
+                .OrderBy(dt => dt.Name)
+                .ToListAsync();
         }
 
         public async Task<IEnumerable<DocumentType>> GetActiveAsync()

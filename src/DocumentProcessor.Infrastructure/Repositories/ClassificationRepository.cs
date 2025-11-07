@@ -32,15 +32,6 @@ namespace DocumentProcessor.Infrastructure.Repositories
                 .ToListAsync();
         }
 
-        public async Task<IEnumerable<Classification>> GetByDocumentTypeIdAsync(Guid documentTypeId)
-        {
-            return await _dbSet
-                .Include(c => c.Document)
-                .Where(c => c.DocumentTypeId == documentTypeId)
-                .OrderByDescending(c => c.ClassifiedAt)
-                .ToListAsync();
-        }
-
         public override async Task<Classification> AddAsync(Classification classification)
         {
             if (classification.Id == Guid.Empty)

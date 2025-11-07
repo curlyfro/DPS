@@ -25,12 +25,8 @@ namespace DocumentProcessor.Core.Entities
 
     public enum ProcessingType
     {
-        TextExtraction,
         Classification,
-        IntentDetection,
-        EntityExtraction,
-        Summarization,
-        CustomProcessing
+        Summarization
     }
 
     public enum ProcessingStatus

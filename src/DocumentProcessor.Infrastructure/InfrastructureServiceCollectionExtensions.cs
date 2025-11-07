@@ -21,9 +21,18 @@ public static class InfrastructureServiceCollectionExtensions
         IConfiguration configuration)
     {
         // Add Entity Framework
-        // Build connection string from AWS Secrets Manager
-        var connectionString = BuildConnectionStringFromSecretsManager().GetAwaiter().GetResult();
-        services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(connectionString));
+        // Use local connection string if available, otherwise use AWS Secrets Manager
+        var localConnectionString = configuration.GetConnectionString("LocalSqlite");
+        if (!string.IsNullOrEmpty(localConnectionString))
+        {
+            services.AddDbContext<ApplicationDbContext>(options => options.UseSqlite(localConnectionString));
+        }
+        else
+        {
+            // Build connection string from AWS Secrets Manager
+            var connectionString = BuildConnectionStringFromSecretsManager().GetAwaiter().GetResult();
+            services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(connectionString));
+        }
 
         // Register repositories
         services.AddScoped<IDocumentRepository, DocumentRepository>();
@@ -37,7 +46,6 @@ public static class InfrastructureServiceCollectionExtensions
 
         // Register document source providers
         services.AddSingleton<LocalFileSystemProvider>();
-        services.AddSingleton<FileShareProvider>();
         services.AddSingleton<IDocumentSourceFactory, DocumentSourceFactory>();
         services.AddScoped<IDocumentSourceProvider>(provider =>
         {
@@ -50,12 +58,8 @@ public static class InfrastructureServiceCollectionExtensions
         // Change to Scoped to support scoped dependencies
         services.AddScoped<IAIProcessorFactory, AIProcessorFactory>();
         
-        // Register DocumentContentExtractor with service provider for transcription support
-        services.AddScoped<DocumentContentExtractor>(provider =>
-        {
-            var logger = provider.GetRequiredService<ILogger<DocumentContentExtractor>>();
-            return new DocumentContentExtractor(logger, provider);
-        });
+        // Register DocumentContentExtractor
+        services.AddScoped<DocumentContentExtractor>();
 
         // Register Bedrock configuration
         var bedrockSection = configuration.GetSection("Bedrock");
@@ -65,15 +69,7 @@ public static class InfrastructureServiceCollectionExtensions
         });
             
         // Register background task services
-        var usePriorityQueue = configuration.GetValue<bool>("BackgroundTasks:UsePriorityQueue", true);
-        if (usePriorityQueue)
-        {
-            services.AddSingleton<IBackgroundTaskQueue, PriorityBackgroundTaskQueue>();
-        }
-        else
-        {
-            services.AddSingleton<IBackgroundTaskQueue, BackgroundTaskQueue>();
-        }
+        services.AddSingleton<IBackgroundTaskQueue, BackgroundTaskQueue>();
             
         // Register hosted services
         var maxConcurrency = configuration.GetValue<int>("BackgroundTasks:MaxConcurrency", 3);
@@ -120,13 +116,25 @@ public static class InfrastructureServiceCollectionExtensions
 
         try
         {
-            logger.LogInformation("Ensuring database exists and is up to date...");
-            await context.Database.MigrateAsync();
-            logger.LogInformation("Database is ready");
+            logger.LogInformation("Ensuring database exists...");
+
+            // Create database from model without running migrations
+            // This will create the database with all tables, indexes, and relationships
+            // based on the current DbContext model
+            var created = await context.Database.EnsureCreatedAsync();
+
+            if (created)
+            {
+                logger.LogInformation("Database created successfully from model");
+            }
+            else
+            {
+                logger.LogInformation("Database already exists");
+            }
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "An error occurred while migrating the database");
+            logger.LogError(ex, "An error occurred while ensuring database exists");
             throw;
         }
     }

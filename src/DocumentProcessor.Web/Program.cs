@@ -1,8 +1,6 @@
 using DocumentProcessor.Infrastructure;
 using DocumentProcessor.Infrastructure.Data;
 using DocumentProcessor.Web.Components;
-using DocumentProcessor.Web.Hubs;
-using DocumentProcessor.Web.Services;
 using DocumentProcessor.Application;
 using DocumentProcessor.Core.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -17,12 +15,6 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
-
-// Add SignalR
-builder.Services.AddSignalR();
-
-// Add notification service
-builder.Services.AddScoped<INotificationService, NotificationService>();
 
 // Add infrastructure services (Database, Repositories, Document Sources)
 builder.Services.AddInfrastructureServices(builder.Configuration);
@@ -63,16 +55,8 @@ builder.Services.AddResponseCompression(options =>
 
 var app = builder.Build();
 
-// Ensure database is created and migrations are applied
+// Ensure database is created
 await app.Services.EnsureDatabaseAsync();
-
-// Initialize stored procedures
-using (var scope = app.Services.CreateScope())
-{
-    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    await DocumentProcessor.Infrastructure.Data.StoredProcedureInitializer.InitializeStoredProceduresAsync(context, logger);
-}
 
 // Seed test document types if none exist
 using (var scope = app.Services.CreateScope())
@@ -218,9 +202,6 @@ app.UseStaticFiles(new StaticFileOptions
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
-
-// Map SignalR hub
-app.MapHub<DocumentProcessingHub>("/documentHub");
 
 // Map health check endpoints
 app.MapHealthChecks("/health");

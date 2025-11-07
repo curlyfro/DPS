@@ -20,11 +20,7 @@ public class DocumentSourceFactory(
 {
     private readonly Dictionary<string, Type> _providerTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["LocalFileSystem"] = typeof(LocalFileSystemProvider),
-        //["MockS3"] = typeof(MockS3Provider),
-        //["S3"] = typeof(MockS3Provider), // Using MockS3Provider until real S3 is implemented
-        ["FileShare"] = typeof(FileShareProvider),
-        ["Network"] = typeof(FileShareProvider) // Alias for FileShare
+        ["LocalFileSystem"] = typeof(LocalFileSystemProvider)
     };
 
     // Register available provider types
@@ -79,90 +75,5 @@ public class DocumentSourceFactory(
     public IEnumerable<string> GetAvailableProviders()
     {
         return _providerTypes.Keys;
-    }
-
-    /// <summary>
-    /// Checks if a provider is available
-    /// </summary>
-    public bool IsProviderAvailable(string providerName)
-    {
-        return !string.IsNullOrWhiteSpace(providerName) && 
-               _providerTypes.ContainsKey(providerName);
-    }
-
-    /// <summary>
-    /// Creates a provider based on document source type
-    /// Useful for automatic provider selection based on path patterns
-    /// </summary>
-    public IDocumentSourceProvider CreateProviderForSource(string sourcePath)
-    {
-        try
-        {
-            // Determine provider based on path pattern
-            if (string.IsNullOrWhiteSpace(sourcePath))
-            {
-                return CreateProvider(); // Use default
-            }
-
-            // Check for S3 URL pattern
-            if (sourcePath.StartsWith("s3://", StringComparison.OrdinalIgnoreCase) ||
-                sourcePath.StartsWith("https://s3", StringComparison.OrdinalIgnoreCase))
-            {
-                logger.LogInformation("Detected S3 path pattern, using S3 provider");
-                return CreateProvider("S3");
-            }
-
-            // Check for UNC path pattern (network share)
-            if (sourcePath.StartsWith("\\\\") || 
-                sourcePath.StartsWith("//") ||
-                sourcePath.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
-            {
-                logger.LogInformation("Detected network path pattern, using FileShare provider");
-                return CreateProvider("FileShare");
-            }
-
-            // Check for absolute local path
-            if (Path.IsPathRooted(sourcePath))
-            {
-                logger.LogInformation("Detected local path pattern, using LocalFileSystem provider");
-                return CreateProvider("LocalFileSystem");
-            }
-
-            // Default to configured provider
-            logger.LogInformation("Using default provider for path: {Path}", sourcePath);
-            return CreateProvider();
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error determining provider for source: {SourcePath}", sourcePath);
-            throw;
-        }
-    }
-
-    /// <summary>
-    /// Registers a custom provider type
-    /// Useful for extending with additional providers at runtime
-    /// </summary>
-    public void RegisterProvider(string name, Type providerType)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            throw new ArgumentException("Provider name cannot be null or empty.", nameof(name));
-        }
-
-        if (providerType == null)
-        {
-            throw new ArgumentNullException(nameof(providerType));
-        }
-
-        if (!typeof(IDocumentSourceProvider).IsAssignableFrom(providerType))
-        {
-            throw new ArgumentException(
-                $"Provider type must implement {nameof(IDocumentSourceProvider)}.", 
-                nameof(providerType));
-        }
-
-        _providerTypes[name] = providerType;
-        logger.LogInformation("Registered custom provider: {Name} -> {Type}", name, providerType.Name);
     }
 }

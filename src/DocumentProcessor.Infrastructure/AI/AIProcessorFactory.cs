@@ -45,10 +45,8 @@ public class AIProcessorFactory : IAIProcessorFactory
         if (contentExtractor == null)
         {
             // Create DocumentContentExtractor if not registered
-            // Pass null for IServiceProvider since it's optional and we want to avoid disposed service provider issues
             contentExtractor = new DocumentContentExtractor(
-                contentExtractorLogger ?? new Microsoft.Extensions.Logging.Abstractions.NullLogger<DocumentContentExtractor>(),
-                null);
+                contentExtractorLogger ?? new Microsoft.Extensions.Logging.Abstractions.NullLogger<DocumentContentExtractor>());
         }
 
         return new BedrockAIProcessor(
@@ -89,10 +87,5 @@ public class AIProcessorFactory : IAIProcessorFactory
 
         _logger.LogInformation("No default provider configured, using AmazonBedrock provider");
         return CreateProcessor(AIProviderType.AmazonBedrock);
-    }
-
-    public IEnumerable<AIProviderType> GetAvailableProviders()
-    {
-        return _processorFactories.Keys;
     }
 }

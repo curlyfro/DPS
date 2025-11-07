@@ -11,8 +11,7 @@ using DocumentProcessor.Infrastructure.Data;
 namespace DocumentProcessor.Infrastructure.Repositories
 {
     /// <summary>
-    /// Repository for Document entities implementing custom stored procedures for optimized data access.
-    /// Uses Data Transfer Objects (DTOs) to handle Entity Framework SqlQueryRaw limitations with navigation properties.
+    /// Repository for Document entities using Entity Framework Core queries.
     /// </summary>
     public class DocumentRepository : RepositoryBase<Document>, IDocumentRepository
     {
@@ -24,63 +23,29 @@ namespace DocumentProcessor.Infrastructure.Repositories
         }
 
         /// <summary>
-        /// Retrieves a document by ID using the GetDocumentById stored procedure.
-        /// Loads document type and metadata navigation properties separately due to SqlQueryRaw limitations.
+        /// Retrieves a document by ID with loaded navigation properties.
         /// </summary>
         /// <param name="id">The unique identifier of the document</param>
         /// <returns>The document with loaded navigation properties, or null if not found</returns>
         public override async Task<Document?> GetByIdAsync(Guid id)
         {
-            var documentDtos = await _context.Database.SqlQueryRaw<DocumentDto>(
-                "EXEC dbo.GetDocumentById @DocumentId = {0}", id).ToListAsync();
-            var documentDto = documentDtos.FirstOrDefault();
-            
-            if (documentDto == null) return null;
-            
-            var document = documentDto.ToDocument();
-            
-            // Load navigation properties if needed using regular EF
-            if (document.DocumentTypeId.HasValue)
-            {
-                document.DocumentType = await _context.DocumentTypes
-                    .FirstOrDefaultAsync(dt => dt.Id == document.DocumentTypeId.Value);
-            }
-            
-            document.Metadata = await _context.DocumentMetadata
-                .FirstOrDefaultAsync(dm => dm.DocumentId == document.Id);
-                
-            return document;
+            return await _dbSet
+                .Include(d => d.DocumentType)
+                .Include(d => d.Metadata)
+                .FirstOrDefaultAsync(d => d.Id == id);
         }
 
         /// <summary>
-        /// Retrieves all active documents using the GetAllDocuments stored procedure.
-        /// Efficiently loads document types in a batch query to minimize database round trips.
+        /// Retrieves all active documents with loaded navigation properties.
         /// </summary>
         /// <returns>All active documents with their document types loaded</returns>
         public new async Task<IEnumerable<Document>> GetAllAsync()
         {
-            var documentDtos = await _context.Database.SqlQueryRaw<DocumentDto>(
-                "EXEC dbo.GetAllDocuments").ToListAsync();
-            
-            var documents = documentDtos.Select(dto => dto.ToDocument()).ToList();
-            
-            // Load document types for all documents in a single query
-            if (documents.Any())
-            {
-                var documentTypeIds = documents.Where(d => d.DocumentTypeId.HasValue)
-                    .Select(d => d.DocumentTypeId!.Value).Distinct().ToList();
-                
-                var documentTypes = await _context.DocumentTypes
-                    .Where(dt => documentTypeIds.Contains(dt.Id))
-                    .ToListAsync();
-                
-                foreach (var document in documents.Where(d => d.DocumentTypeId.HasValue))
-                {
-                    document.DocumentType = documentTypes.FirstOrDefault(dt => dt.Id == document.DocumentTypeId);
-                }
-            }
-            
-            return documents;
+            return await _dbSet
+                .Include(d => d.DocumentType)
+                .Where(d => !d.IsDeleted)
+                .OrderByDescending(d => d.UploadedAt)
+                .ToListAsync();
         }
 
         /// <summary>
@@ -260,10 +225,13 @@ namespace DocumentProcessor.Infrastructure.Repositories
 
         public new async Task<IEnumerable<Document>> GetPagedAsync(int pageNumber, int pageSize)
         {
-            var documentDtos = await _context.Database.SqlQueryRaw<DocumentDto>(
-                "EXEC dbo.GetPagedDocuments @PageNumber = {0}, @PageSize = {1}", pageNumber, pageSize).ToListAsync();
-            
-            return documentDtos.Select(dto => dto.ToDocument()).ToList();
+            return await _dbSet
+                .Include(d => d.DocumentType)
+                .Where(d => !d.IsDeleted)
+                .OrderByDescending(d => d.UploadedAt)
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
         }
 
     }

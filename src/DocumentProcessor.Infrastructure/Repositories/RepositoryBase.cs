@@ -40,32 +40,10 @@ namespace DocumentProcessor.Infrastructure.Repositories
             return entity;
         }
 
-        public virtual async Task AddRangeAsync(IEnumerable<T> entities)
-        {
-            await _dbSet.AddRangeAsync(entities);
-        }
-
         public virtual Task UpdateAsync(T entity)
         {
             _dbSet.Update(entity);
             return Task.CompletedTask;
-        }
-
-        public virtual Task RemoveAsync(T entity)
-        {
-            _dbSet.Remove(entity);
-            return Task.CompletedTask;
-        }
-
-        public virtual Task RemoveRangeAsync(IEnumerable<T> entities)
-        {
-            _dbSet.RemoveRange(entities);
-            return Task.CompletedTask;
-        }
-
-        public virtual async Task<bool> ExistsAsync(Expression<Func<T, bool>> predicate)
-        {
-            return await _dbSet.AnyAsync(predicate);
         }
 
         public virtual async Task<int> CountAsync()
@@ -78,22 +56,12 @@ namespace DocumentProcessor.Infrastructure.Repositories
             return await _dbSet.CountAsync(predicate);
         }
 
-        public virtual async Task<T?> GetFirstOrDefaultAsync(Expression<Func<T, bool>> predicate)
-        {
-            return await _dbSet.FirstOrDefaultAsync(predicate);
-        }
-
         public virtual async Task<IEnumerable<T>> GetPagedAsync(int pageNumber, int pageSize)
         {
             return await _dbSet
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
-        }
-
-        public virtual IQueryable<T> GetQueryable()
-        {
-            return _dbSet.AsQueryable();
         }
     }
 }

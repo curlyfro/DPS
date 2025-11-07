@@ -8,7 +8,6 @@ using DocumentProcessor.Core.Entities;
 using DocumentProcessor.Core.Interfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Microsoft.Extensions.DependencyInjection;
 using System.Linq;
 
 namespace DocumentProcessor.Infrastructure.AI;
@@ -47,46 +46,17 @@ public class BedrockAIProcessor : IAIProcessor
         // Use profile if specified (for development)
         if (!string.IsNullOrEmpty(_options.AwsProfile))
         {
-            var credentials = new Amazon.Runtime.StoredProfileAWSCredentials(_options.AwsProfile);
-            _bedrockClient = new AmazonBedrockRuntimeClient(credentials, config);
-        }
-        else
-        {
-            // Use default credentials (IAM role, environment variables, etc.)
-            _bedrockClient = new AmazonBedrockRuntimeClient(config);
-        }
-    }
-
-    /// <summary>
-    /// Legacy constructor that accepts IServiceProvider (obsolete)
-    /// </summary>
-    [Obsolete("Use constructor that accepts DocumentContentExtractor directly instead")]
-    public BedrockAIProcessor(
-        ILogger<BedrockAIProcessor> logger,
-        IOptions<BedrockOptions> options,
-        IServiceProvider serviceProvider)
-    {
-        _logger = logger;
-        _options = options.Value;
-
-        // Try to get DocumentContentExtractor from DI, or create a new instance
-        var contentExtractorLogger = serviceProvider.GetService<ILogger<DocumentContentExtractor>>();
-        _contentExtractor = serviceProvider.GetService<DocumentContentExtractor>() ??
-                            new DocumentContentExtractor(contentExtractorLogger ??
-                                                         new Microsoft.Extensions.Logging.Abstractions.NullLogger<DocumentContentExtractor>(),
-                                                         serviceProvider);
-
-        // Initialize Bedrock client
-        var config = new AmazonBedrockRuntimeConfig
-        {
-            RegionEndpoint = RegionEndpoint.GetBySystemName(_options.Region)
-        };
-
-        // Use profile if specified (for development)
-        if (!string.IsNullOrEmpty(_options.AwsProfile))
-        {
-            var credentials = new Amazon.Runtime.StoredProfileAWSCredentials(_options.AwsProfile);
-            _bedrockClient = new AmazonBedrockRuntimeClient(credentials, config);
+            // Use SharedCredentialsFile instead of obsolete StoredProfileAWSCredentials
+            var credentialFile = new Amazon.Runtime.CredentialManagement.SharedCredentialsFile();
+            if (credentialFile.TryGetProfile(_options.AwsProfile, out var profile) &&
+                profile.GetAWSCredentials(credentialFile) is var credentials)
+            {
+                _bedrockClient = new AmazonBedrockRuntimeClient(credentials, config);
+            }
+            else
+            {
+                throw new InvalidOperationException($"AWS profile '{_options.AwsProfile}' not found in credentials file");
+            }
         }
         else
         {
@@ -261,7 +231,7 @@ public class BedrockAIProcessor : IAIProcessor
         var content = await reader.ReadToEndAsync();
             
         // Truncate content if it's too long for the model
-        // Claude models have different token limits, using conservative character limit
+        // Anthropic models have different token limits, using conservative character limit
         const int maxCharacters = 50000; // Approximately 12,500 tokens
         if (content.Length > maxCharacters)
         {
