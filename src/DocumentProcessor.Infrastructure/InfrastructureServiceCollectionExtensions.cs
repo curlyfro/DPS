@@ -11,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 
 namespace DocumentProcessor.Infrastructure;
 
@@ -31,7 +32,7 @@ public static class InfrastructureServiceCollectionExtensions
         {
             // Build connection string from AWS Secrets Manager
             var connectionString = BuildConnectionStringFromSecretsManager().GetAwaiter().GetResult();
-            services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(connectionString));
+            services.AddDbContext<ApplicationDbContext>(options => options.UseNpgsql(connectionString));
         }
 
         // Register repositories
@@ -140,7 +141,7 @@ public static class InfrastructureServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Builds a SQL Server connection string from AWS Secrets Manager
+    /// Builds a PostgreSQL connection string from AWS Secrets Manager
     /// </summary>
     private static async Task<string> BuildConnectionStringFromSecretsManager()
     {
@@ -157,8 +158,8 @@ public static class InfrastructureServiceCollectionExtensions
         var port = secretsService.GetFieldFromSecret(connectionInfoSecretJson, "port");
         var dbname = secretsService.GetFieldFromSecret(connectionInfoSecretJson, "dbname");
 
-        // Build SQL Server connection string
-        var connectionString = $"Server={host},{port};Database={dbname};User Id={username};Password={password};TrustServerCertificate=true;MultipleActiveResultSets=true";
+        // Build PostgreSQL connection string
+        var connectionString = $"Host={host};Port={port};Database={dbname};Username={username};Password={password}";
 
         return connectionString;
     }
