@@ -6,6 +6,6 @@
                                  }
                 },
     "ConnectionStrings":  {
-                              "DefaultConnection":  "Server=,;MultipleActiveResultSets=true;TrustServerCertificate=true;Integrated Security=false;Database=DPS"
+                              "DefaultConnection":  "Server=dps.crxydkntj70g.us-east-1.rds.amazonaws.com,1433;Database=DPS;Integrated Security=false;TrustServerCertificate=true;MultipleActiveResultSets=true"
                           }
 }
