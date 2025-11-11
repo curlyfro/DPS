@@ -205,16 +205,13 @@ public static class InfrastructureServiceCollectionExtensions
     {
         var secretsService = new SecretsManagerService();
 
-        // Get credentials from secret with description starting with "Password for RDS MSSQL used for MAM319."
-        var credentialsSecretJson = await secretsService.GetSecretByDescriptionPrefixAsync("Password for RDS MSSQL used for MAM319.");
-        var username = secretsService.GetFieldFromSecret(credentialsSecretJson, "username");
-        var password = secretsService.GetFieldFromSecret(credentialsSecretJson, "password");
-
-        // Get connection info from secret named "atx-db-modernization-1"
-        var connectionInfoSecretJson = await secretsService.GetSecretAsync("atx-db-modernization-1");
-        var host = secretsService.GetFieldFromSecret(connectionInfoSecretJson, "host");
-        var port = secretsService.GetFieldFromSecret(connectionInfoSecretJson, "port");
-        var dbname = secretsService.GetFieldFromSecret(connectionInfoSecretJson, "dbname");
+        // Get all connection info from secret with description starting with "Password for RDS MSSQL used for MAM319."
+        var secretJson = await secretsService.GetSecretByDescriptionPrefixAsync("Password for RDS MSSQL used for MAM319.");
+        var username = secretsService.GetFieldFromSecret(secretJson, "username");
+        var password = secretsService.GetFieldFromSecret(secretJson, "password");
+        var host = secretsService.GetFieldFromSecret(secretJson, "host");
+        var port = secretsService.GetFieldFromSecret(secretJson, "port");
+        var dbname = secretsService.GetFieldFromSecret(secretJson, "dbname");
 
         // Build SQL Server connection string
         var connectionString = $"Server={host},{port};Database={dbname};User Id={username};Password={password};TrustServerCertificate=true;MultipleActiveResultSets=true";
