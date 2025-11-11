@@ -58,104 +58,42 @@ var app = builder.Build();
 // Ensure database is created
 await app.Services.EnsureDatabaseAsync();
 
-// Seed test document types if none exist
-using (var scope = app.Services.CreateScope())
-{
-    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    
-    if (!context.DocumentTypes.Any(dt => dt.IsActive))
-    {
-        logger.LogInformation("Seeding test document types...");
-        
-        var documentTypes = new[]
-        {
-            new DocumentType
-            {
-                Id = Guid.NewGuid(),
-                Name = "PDF Documents",
-                Description = "Portable Document Format files",
-                Category = "General",
-                IsActive = true,
-                Priority = 1,
-                FileExtensions = ".pdf",
-                Keywords = "pdf,document,portable",
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            },
-            new DocumentType
-            {
-                Id = Guid.NewGuid(),
-                Name = "Word Documents",
-                Description = "Microsoft Word documents",
-                Category = "General",
-                IsActive = true,
-                Priority = 2,
-                FileExtensions = ".docx,.doc",
-                Keywords = "word,document,microsoft",
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            },
-            new DocumentType
-            {
-                Id = Guid.NewGuid(),
-                Name = "Excel Spreadsheets",
-                Description = "Microsoft Excel spreadsheet files",
-                Category = "Data",
-                IsActive = true,
-                Priority = 3,
-                FileExtensions = ".xlsx,.xls",
-                Keywords = "excel,spreadsheet,data",
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            }
-        };
-        
-        context.DocumentTypes.AddRange(documentTypes);
-        await context.SaveChangesAsync();
-        
-        logger.LogInformation("Test document types seeded successfully");
-    }
-}
-
 // Re-queue stuck documents from previous runs
 using (var scope = app.Services.CreateScope())
 {
+    var documentRepository = scope.ServiceProvider.GetRequiredService<DocumentProcessor.Core.Interfaces.IDocumentRepository>();
     var processingService = scope.ServiceProvider.GetRequiredService<DocumentProcessor.Application.Services.IDocumentProcessingService>();
-    var processingQueueRepo = scope.ServiceProvider.GetService<DocumentProcessor.Core.Interfaces.IProcessingQueueRepository>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
-    if (processingQueueRepo != null)
+    logger.LogInformation("Checking for stuck documents...");
+
+    // Get all pending and queued documents
+    var pendingDocs = await documentRepository.GetByStatusAsync(DocumentProcessor.Core.Entities.DocumentStatus.Pending);
+    var queuedDocs = await documentRepository.GetByStatusAsync(DocumentProcessor.Core.Entities.DocumentStatus.Queued);
+    var stuckDocuments = pendingDocs.Concat(queuedDocs).ToList();
+
+    if (stuckDocuments.Any())
     {
-        logger.LogInformation("Checking for stuck documents in queue...");
+        logger.LogInformation("Found {Count} stuck documents. Re-queuing them...", stuckDocuments.Count);
 
-        // Get all pending queue items
-        var stuckItems = await processingQueueRepo.GetByStatusAsync(DocumentProcessor.Core.Entities.ProcessingStatus.Pending);
-        var stuckItemsList = stuckItems.ToList();
-
-        if (stuckItemsList.Any())
+        foreach (var document in stuckDocuments)
         {
-            logger.LogInformation("Found {Count} stuck documents in queue. Re-queuing them...", stuckItemsList.Count);
-
-            foreach (var item in stuckItemsList)
+            try
             {
-                try
-                {
-                    logger.LogInformation("Re-queuing document {DocumentId} from queue item {QueueId}", item.DocumentId, item.Id);
-                    await processingService.QueueDocumentForProcessingAsync(item.DocumentId);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Failed to re-queue document {DocumentId}", item.DocumentId);
-                }
+                logger.LogInformation("Re-queuing document {DocumentId}", document.Id);
+                await processingService.QueueDocumentForProcessingAsync(document.Id);
             }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to re-queue document {DocumentId}", document.Id);
+            }
+        }
 
-            logger.LogInformation("Finished re-queuing stuck documents");
-        }
-        else
-        {
-            logger.LogInformation("No stuck documents found in queue");
-        }
+        logger.LogInformation("Finished re-queuing stuck documents");
+    }
+    else
+    {
+        logger.LogInformation("No stuck documents found in queue");
     }
 }
 

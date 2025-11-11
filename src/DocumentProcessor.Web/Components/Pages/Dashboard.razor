@@ -66,9 +66,9 @@
                                                 @doc.FileName
                                             </td>
                                             <td>
-                                                @if (doc.DocumentType != null)
+                                                @if (!string.IsNullOrEmpty(doc.DocumentTypeName))
                                                 {
-                                                    <span class="badge bg-info">@doc.DocumentType.Name</span>
+                                                    <span class="badge bg-info">@doc.DocumentTypeName</span>
                                                 }
                                                 else
                                                 {
@@ -152,9 +152,9 @@
                 <div class="modal-body">
                     <div class="mb-3">
                         <h6 class="text-muted">Document Type</h6>
-                        @if (selectedDocument.DocumentType != null)
+                        @if (!string.IsNullOrEmpty(selectedDocument.DocumentTypeName))
                         {
-                            <span class="badge bg-info">@selectedDocument.DocumentType.Name</span>
+                            <span class="badge bg-info">@selectedDocument.DocumentTypeName</span>
                         }
                         else
                         {

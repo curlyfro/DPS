@@ -11,7 +11,7 @@ namespace DocumentProcessor.Core.Interfaces
         Task<Document?> GetByIdAsync(Guid id);
         Task<IEnumerable<Document>> GetAllAsync();
         Task<IEnumerable<Document>> GetByStatusAsync(DocumentStatus status);
-        Task<IEnumerable<Document>> GetByDocumentTypeAsync(Guid documentTypeId);
+        Task<IEnumerable<Document>> GetByDocumentTypeAsync(string documentTypeName);
         Task<IEnumerable<Document>> GetPendingDocumentsAsync(int limit = 100);
         Task<IEnumerable<Document>> FindAsync(Expression<Func<Document, bool>> predicate);
         Task<Document> AddAsync(Document document);

@@ -8,12 +8,7 @@ namespace DocumentProcessor.Infrastructure.Data
     public class UnitOfWork : IUnitOfWork
     {
         private readonly ApplicationDbContext _context;
-
         private IDocumentRepository? _documents;
-        private IDocumentTypeRepository? _documentTypes;
-        private IClassificationRepository? _classifications;
-        private IProcessingQueueRepository? _processingQueues;
-        private IDocumentMetadataRepository? _documentMetadata;
 
         public UnitOfWork(ApplicationDbContext context)
         {
@@ -26,42 +21,6 @@ namespace DocumentProcessor.Infrastructure.Data
             {
                 _documents ??= new DocumentRepository(_context);
                 return _documents;
-            }
-        }
-
-        public IDocumentTypeRepository DocumentTypes
-        {
-            get
-            {
-                _documentTypes ??= new DocumentTypeRepository(_context);
-                return _documentTypes;
-            }
-        }
-
-        public IClassificationRepository Classifications
-        {
-            get
-            {
-                _classifications ??= new ClassificationRepository(_context);
-                return _classifications;
-            }
-        }
-
-        public IProcessingQueueRepository ProcessingQueues
-        {
-            get
-            {
-                _processingQueues ??= new ProcessingQueueRepository(_context);
-                return _processingQueues;
-            }
-        }
-
-        public IDocumentMetadataRepository DocumentMetadata
-        {
-            get
-            {
-                _documentMetadata ??= new DocumentMetadataRepository(_context);
-                return _documentMetadata;
             }
         }
 

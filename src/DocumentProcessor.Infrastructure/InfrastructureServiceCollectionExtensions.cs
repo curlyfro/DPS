@@ -36,11 +36,7 @@ public static class InfrastructureServiceCollectionExtensions
 
         // Register repositories
         services.AddScoped<IDocumentRepository, DocumentRepository>();
-        services.AddScoped<IDocumentTypeRepository, DocumentTypeRepository>();
-        services.AddScoped<IClassificationRepository, ClassificationRepository>();
-        services.AddScoped<IProcessingQueueRepository, ProcessingQueueRepository>();
-        services.AddScoped<IDocumentMetadataRepository, DocumentMetadataRepository>();
-            
+
         // Register Unit of Work
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
@@ -113,10 +109,20 @@ public static class InfrastructureServiceCollectionExtensions
         using var scope = services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<ApplicationDbContext>>();
+        var hostEnvironment = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
 
         try
         {
             logger.LogInformation("Ensuring database exists...");
+
+            // In development, drop and recreate the database to ensure schema is up to date
+            // This is safe for development but should NEVER be done in production
+            if (hostEnvironment.IsDevelopment())
+            {
+                logger.LogWarning("Development mode: Dropping and recreating database to ensure schema is current");
+                await context.Database.EnsureDeletedAsync();
+                logger.LogInformation("Database dropped successfully");
+            }
 
             // Create database from model without running migrations
             // This will create the database with all tables, indexes, and relationships

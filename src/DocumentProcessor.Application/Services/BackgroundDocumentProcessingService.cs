@@ -51,7 +51,6 @@ public class BackgroundDocumentProcessingService(
             // Get required services from the scope
             var documentRepository = scope.ServiceProvider.GetRequiredService<IDocumentRepository>();
             var processingService = scope.ServiceProvider.GetRequiredService<IDocumentProcessingService>();
-            var processingQueueRepo = scope.ServiceProvider.GetRequiredService<IProcessingQueueRepository>();
 
             // Load the document
             var document = await documentRepository.GetByIdAsync(documentId);
@@ -61,51 +60,18 @@ public class BackgroundDocumentProcessingService(
                 return;
             }
 
-            // Get all processing queue items for this document
-            var queueItems = await processingQueueRepo.GetByDocumentIdAsync(documentId);
-            var pendingQueueItems = queueItems.Where(q =>
-                q.Status == ProcessingStatus.Pending ||
-                q.Status == ProcessingStatus.InProgress ||
-                q.Status == ProcessingStatus.Retrying).ToList();
-
-            // Process the document using the correct method signature
+            // Process the document (processing service handles all status updates)
             var result = await processingService.ProcessDocumentAsync(documentId);
 
             if (result.Success)
             {
                 logger.LogInformation("Successfully processed document {DocumentId}", documentId);
-
-                // Update document status
-                document.Status = DocumentStatus.Processed;
-                document.ProcessedAt = DateTime.UtcNow;
-                await documentRepository.UpdateAsync(document);
-
-                // Update all pending processing queue items to completed
-                foreach (var queueItem in pendingQueueItems)
-                {
-                    await processingQueueRepo.CompleteProcessingAsync(queueItem.Id, result.ErrorMessage);
-                    logger.LogDebug("Marked queue item {QueueItemId} as completed for document {DocumentId}",
-                        queueItem.Id, documentId);
-                }
             }
             else
             {
                 logger.LogError("Failed to process document {DocumentId}: {Error}",
                     documentId, result.ErrorMessage);
 
-                // Update document status
-                document.Status = DocumentStatus.Failed;
-                await documentRepository.UpdateAsync(document);
-
-                // Update all pending processing queue items to failed
-                foreach (var queueItem in pendingQueueItems)
-                {
-                    await processingQueueRepo.FailProcessingAsync(queueItem.Id,
-                        result.ErrorMessage ?? "Processing failed",
-                        result.ErrorMessage);
-                    logger.LogDebug("Marked queue item {QueueItemId} as failed for document {DocumentId}",
-                        queueItem.Id, documentId);
-                }
             }
         }
         catch (Exception ex)
@@ -114,28 +80,16 @@ public class BackgroundDocumentProcessingService(
 
             using var innerScope = serviceScopeFactory.CreateScope();
             var documentRepository = innerScope.ServiceProvider.GetRequiredService<IDocumentRepository>();
-            var processingQueueRepo = innerScope.ServiceProvider.GetRequiredService<IProcessingQueueRepository>();
 
             // Update document status to failed
             var document = await documentRepository.GetByIdAsync(documentId);
-            if (document == null) throw;
-            document.Status = DocumentStatus.Failed;
-            await documentRepository.UpdateAsync(document);
-
-            // Update all pending processing queue items to failed
-            var queueItems = await processingQueueRepo.GetByDocumentIdAsync(documentId);
-            var pendingQueueItems = queueItems.Where(q =>
-                q.Status == ProcessingStatus.Pending ||
-                q.Status == ProcessingStatus.InProgress ||
-                q.Status == ProcessingStatus.Retrying).ToList();
-
-            foreach (var queueItem in pendingQueueItems)
+            if (document != null)
             {
-                await processingQueueRepo.FailProcessingAsync(queueItem.Id,
-                    ex.Message,
-                    ex.StackTrace);
-                logger.LogDebug("Marked queue item {QueueItemId} as failed due to exception for document {DocumentId}",
-                    queueItem.Id, documentId);
+                document.Status = DocumentStatus.Failed;
+                document.ProcessingStatus = "Failed";
+                document.ProcessingErrorMessage = ex.Message;
+                document.ProcessingCompletedAt = DateTime.UtcNow;
+                await documentRepository.UpdateAsync(document);
             }
 
             throw;
@@ -170,11 +124,7 @@ public class BackgroundDocumentProcessingService(
             logger.LogInformation("Starting cleanup of stuck documents (timeout: {TimeoutMinutes} minutes)", timeoutMinutes);
 
             var documentRepository = scope.ServiceProvider.GetRequiredService<IDocumentRepository>();
-            var processingQueueRepo = scope.ServiceProvider.GetService<IProcessingQueueRepository>();
             var cutoffTime = DateTime.UtcNow.AddMinutes(-timeoutMinutes);
-
-            // Clean up stuck queue items - GetStuckItemsAsync method was removed as it was unused
-            // Queue cleanup is now handled through document status updates below
 
             // Find documents that are still in processing status but have been there too long
             var stuckDocuments = await documentRepository.GetByStatusAsync(DocumentStatus.Processing);
@@ -186,7 +136,10 @@ public class BackgroundDocumentProcessingService(
                     document.Id, document.FileName, document.UpdatedAt);
 
                 document.Status = DocumentStatus.Failed;
+                document.ProcessingStatus = "Failed";
+                document.ProcessingErrorMessage = "Processing timeout - stuck for too long";
                 document.ProcessedAt = DateTime.UtcNow;
+                document.ProcessingCompletedAt = DateTime.UtcNow;
                 document.UpdatedAt = DateTime.UtcNow;
                 await documentRepository.UpdateAsync(document);
             }

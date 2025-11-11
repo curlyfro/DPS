@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 
 namespace DocumentProcessor.Core.Entities
 {
@@ -16,10 +15,23 @@ namespace DocumentProcessor.Core.Entities
         public string? S3Bucket { get; set; }
         public DocumentSource Source { get; set; }
         public DocumentStatus Status { get; set; }
-        public Guid? DocumentTypeId { get; set; }
-        public DocumentType? DocumentType { get; set; }
+
+        // Flattened DocumentType fields
+        public string? DocumentTypeName { get; set; }
+        public string? DocumentTypeCategory { get; set; }
+
+        // Flattened Processing fields
+        public string? ProcessingStatus { get; set; }
+        public int ProcessingRetryCount { get; set; }
+        public string? ProcessingErrorMessage { get; set; }
+        public DateTime? ProcessingStartedAt { get; set; }
+        public DateTime? ProcessingCompletedAt { get; set; }
+
+        // Content fields
         public string? ExtractedText { get; set; }
         public string? Summary { get; set; }
+
+        // Audit fields
         public DateTime UploadedAt { get; set; }
         public DateTime? ProcessedAt { get; set; }
         public string UploadedBy { get; set; } = string.Empty;
@@ -27,11 +39,6 @@ namespace DocumentProcessor.Core.Entities
         public DateTime UpdatedAt { get; set; }
         public bool IsDeleted { get; set; }
         public DateTime? DeletedAt { get; set; }
-        
-        // Navigation properties
-        public ICollection<Classification> Classifications { get; set; } = new List<Classification>();
-        public ICollection<ProcessingQueue> ProcessingQueueItems { get; set; } = new List<ProcessingQueue>();
-        public DocumentMetadata? Metadata { get; set; }
     }
 
     public enum DocumentSource
