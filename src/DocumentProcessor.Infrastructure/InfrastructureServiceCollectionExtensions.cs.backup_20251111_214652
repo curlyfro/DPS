@@ -22,7 +22,7 @@ public static class InfrastructureServiceCollectionExtensions
     {
         // Add Entity Framework
         // Use local connection string if available, otherwise use AWS Secrets Manager
-        var localConnectionString = configuration.GetConnectionString("DefaultConnection");
+        var localConnectionString = configuration.GetConnectionString("LocalSqlite");
         if (!string.IsNullOrEmpty(localConnectionString))
         {
             services.AddDbContext<ApplicationDbContext>(options => options.UseSqlite(localConnectionString));
