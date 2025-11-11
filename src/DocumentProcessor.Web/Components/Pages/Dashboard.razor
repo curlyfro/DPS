@@ -120,9 +120,14 @@
                                                 }
                                             </td>
                                             <td>
-                                                <button class="btn btn-sm btn-danger" @onclick="() => ShowDeleteConfirmation(doc)" title="Delete document">
-                                                    <i class="bi bi-trash"></i>
-                                                </button>
+                                                <div class="btn-group" role="group">
+                                                    <button class="btn btn-sm btn-primary" @onclick="() => ShowSummaryModal(doc)" title="View details">
+                                                        <i class="bi bi-eye"></i> View
+                                                    </button>
+                                                    <button class="btn btn-sm btn-danger" @onclick="() => ShowDeleteConfirmation(doc)" title="Delete document">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     }

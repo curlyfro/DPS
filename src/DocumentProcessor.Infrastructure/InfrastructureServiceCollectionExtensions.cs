@@ -132,6 +132,59 @@ public static class InfrastructureServiceCollectionExtensions
             if (created)
             {
                 logger.LogInformation("Database created successfully from model");
+
+                // Create database view for document summaries
+                logger.LogInformation("Creating database view: vw_DocumentSummary");
+                await context.Database.ExecuteSqlRawAsync(@"
+                    CREATE VIEW vw_DocumentSummary AS
+                    SELECT
+                        DocumentTypeName,
+                        Status,
+                        COUNT(*) AS DocumentCount,
+                        AVG(DATEDIFF(SECOND, UploadedAt, COALESCE(ProcessedAt, GETUTCDATE()))) AS AvgProcessingTimeSeconds,
+                        MIN(UploadedAt) AS FirstUploadedAt,
+                        MAX(UploadedAt) AS LastUploadedAt
+                    FROM Documents
+                    WHERE IsDeleted = 0
+                    GROUP BY DocumentTypeName, Status
+                ");
+                logger.LogInformation("Created view: vw_DocumentSummary");
+
+                // Create stored procedure for getting recent documents
+                logger.LogInformation("Creating stored procedure: sp_GetRecentDocuments");
+                await context.Database.ExecuteSqlRawAsync(@"
+                    CREATE PROCEDURE sp_GetRecentDocuments
+                        @Days INT = 7,
+                        @Status INT = NULL,
+                        @DocumentTypeName NVARCHAR(200) = NULL
+                    AS
+                    BEGIN
+                        SET NOCOUNT ON;
+
+                        SELECT
+                            Id,
+                            FileName,
+                            FileExtension,
+                            StoragePath,
+                            FileSize,
+                            DocumentTypeName,
+                            DocumentTypeCategory,
+                            Status,
+                            ProcessingStatus,
+                            Summary,
+                            UploadedAt,
+                            ProcessedAt,
+                            ProcessingStartedAt,
+                            ProcessingCompletedAt
+                        FROM Documents
+                        WHERE IsDeleted = 0
+                            AND UploadedAt >= DATEADD(DAY, -@Days, GETUTCDATE())
+                            AND (@Status IS NULL OR Status = @Status)
+                            AND (@DocumentTypeName IS NULL OR DocumentTypeName = @DocumentTypeName)
+                        ORDER BY UploadedAt DESC
+                    END
+                ");
+                logger.LogInformation("Created stored procedure: sp_GetRecentDocuments");
             }
             else
             {
