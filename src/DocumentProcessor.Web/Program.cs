@@ -119,8 +119,13 @@ app.UseRateLimiter();
 
 app.UseAntiforgery();
 
-// Serve static files from wwwroot
-app.UseStaticFiles();
+// Serve static files from wwwroot with explicit MIME type for scoped CSS
+var provider = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+provider.Mappings[".styles.css"] = "text/css";
+app.UseStaticFiles(new StaticFileOptions
+{
+    ContentTypeProvider = provider
+});
 
 
 // Serve files from the uploads directory

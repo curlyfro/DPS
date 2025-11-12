@@ -31,13 +31,4 @@
     <ProjectReference Include="..\DocumentProcessor.Core\DocumentProcessor.Core.csproj" />
   </ItemGroup>
 
-  <!-- Copy scoped CSS bundle to wwwroot after build for easier deployment -->
-  <Target Name="CopyScopedCssToWwwroot" AfterTargets="Build">
-    <ItemGroup>
-      <ScopedCssBundle Include="$(IntermediateOutputPath)scopedcss\bundle\*.styles.css" />
-    </ItemGroup>
-    <Copy SourceFiles="@(ScopedCssBundle)" DestinationFolder="$(ProjectDir)wwwroot\" SkipUnchangedFiles="true" Condition="Exists('$(IntermediateOutputPath)scopedcss\bundle\')" />
-    <Message Text="Copied scoped CSS bundle to wwwroot: @(ScopedCssBundle)" Importance="high" Condition="Exists('$(IntermediateOutputPath)scopedcss\bundle\')" />
-  </Target>
-
 </Project>
