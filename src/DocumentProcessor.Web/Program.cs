@@ -16,6 +16,16 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+// Add Blazor Server configuration with detailed error logging
+builder.Services.AddServerSideBlazor()
+    .AddCircuitOptions(options =>
+    {
+        if (builder.Environment.IsDevelopment())
+        {
+            options.DetailedErrors = true;
+        }
+    });
+
 // Add infrastructure services (Database, Repositories, Document Sources)
 builder.Services.AddInfrastructureServices(builder.Configuration);
 
@@ -25,11 +35,17 @@ builder.Services.AddApplicationServices();
 // Add health checks
 builder.Services.AddInfrastructureHealthChecks(builder.Configuration);
 
-// Add additional logging if needed
+// Add additional logging with detailed error information
 builder.Services.AddLogging(logging =>
 {
+    logging.ClearProviders();
     logging.AddConsole();
     logging.AddDebug();
+    logging.SetMinimumLevel(LogLevel.Information);
+
+    // Add detailed logging for Blazor
+    logging.AddFilter("Microsoft.AspNetCore.Components", LogLevel.Debug);
+    logging.AddFilter("Microsoft.AspNetCore.SignalR", LogLevel.Debug);
 });
 
 // Add rate limiting (simplified for now - can be enhanced later)
@@ -98,9 +114,12 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Configure the HTTP request pipeline.
+var appLogger = app.Services.GetRequiredService<ILogger<Program>>();
+
 if (app.Environment.IsDevelopment())
 {
-    // Development environment configuration
+    app.UseDeveloperExceptionPage();
+    appLogger.LogInformation("Running in Development mode with detailed error pages enabled");
 }
 else
 {
@@ -108,6 +127,20 @@ else
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
+
+// Add middleware to log all unhandled exceptions
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (Exception ex)
+    {
+        appLogger.LogError(ex, "Unhandled exception occurred. Path: {Path}", context.Request.Path);
+        throw;
+    }
+});
 
 app.UseHttpsRedirection();
 
