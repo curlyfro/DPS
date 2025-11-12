@@ -25,7 +25,17 @@ public static class InfrastructureServiceCollectionExtensions
         var localConnectionString = configuration.GetConnectionString("DefaultConnection");
         if (!string.IsNullOrEmpty(localConnectionString))
         {
-            services.AddDbContext<ApplicationDbContext>(options => options.UseSqlite(localConnectionString));
+            // Detect connection string type: SQL Server contains "Server=" or "Data Source="
+            if (localConnectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase) ||
+                localConnectionString.Contains("Data Source=", StringComparison.OrdinalIgnoreCase))
+            {
+                services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(localConnectionString));
+            }
+            else
+            {
+                // Assume SQLite for file-based connection strings
+                services.AddDbContext<ApplicationDbContext>(options => options.UseSqlite(localConnectionString));
+            }
         }
         else
         {
