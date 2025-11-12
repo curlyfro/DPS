@@ -20,29 +20,22 @@ public static class InfrastructureServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        // Add Entity Framework
+        // Add Entity Framework - Always use SQL Server (RDS)
         // Use local connection string if available, otherwise use AWS Secrets Manager
         var localConnectionString = configuration.GetConnectionString("DefaultConnection");
+        string connectionString;
+
         if (!string.IsNullOrEmpty(localConnectionString))
         {
-            // Detect connection string type: SQL Server contains "Server=" or "Data Source="
-            if (localConnectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase) ||
-                localConnectionString.Contains("Data Source=", StringComparison.OrdinalIgnoreCase))
-            {
-                services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(localConnectionString));
-            }
-            else
-            {
-                // Assume SQLite for file-based connection strings
-                services.AddDbContext<ApplicationDbContext>(options => options.UseSqlite(localConnectionString));
-            }
+            connectionString = localConnectionString;
         }
         else
         {
             // Build connection string from AWS Secrets Manager
-            var connectionString = BuildConnectionStringFromSecretsManager().GetAwaiter().GetResult();
-            services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(connectionString));
+            connectionString = BuildConnectionStringFromSecretsManager().GetAwaiter().GetResult();
         }
+
+        services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(connectionString));
 
         // Register repositories
         services.AddScoped<IDocumentRepository, DocumentRepository>();
