@@ -21,18 +21,24 @@ public static class InfrastructureServiceCollectionExtensions
         IConfiguration configuration)
     {
         // Add Entity Framework - Always use SQL Server (RDS)
-        // Use local connection string if available, otherwise use AWS Secrets Manager
-        var localConnectionString = configuration.GetConnectionString("DefaultConnection");
+        // Default: Use AWS Secrets Manager
+        // Fallback: Use local connection string from configuration
         string connectionString;
 
-        if (!string.IsNullOrEmpty(localConnectionString))
+        try
         {
-            connectionString = localConnectionString;
-        }
-        else
-        {
-            // Build connection string from AWS Secrets Manager
+            // Primary: Build connection string from AWS Secrets Manager
             connectionString = BuildConnectionStringFromSecretsManager().GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // Fallback: Use local connection string if Secrets Manager is unavailable
+            var localConnectionString = configuration.GetConnectionString("DefaultConnection");
+            if (string.IsNullOrEmpty(localConnectionString))
+            {
+                throw new InvalidOperationException("Unable to retrieve connection string from AWS Secrets Manager and no local connection string is configured.");
+            }
+            connectionString = localConnectionString;
         }
 
         services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(connectionString));
