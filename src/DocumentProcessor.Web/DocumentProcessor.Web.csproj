@@ -4,8 +4,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <!-- Ensure scoped CSS is generated -->
-    <ScopedCssEnabled>true</ScopedCssEnabled>
+    <!-- Disable scoped CSS - using regular CSS in app.css instead -->
+    <ScopedCssEnabled>false</ScopedCssEnabled>
   </PropertyGroup>
 
   <ItemGroup>
@@ -31,18 +31,6 @@
   <ItemGroup>
     <ProjectReference Include="..\DocumentProcessor.Application\DocumentProcessor.Application.csproj" />
     <ProjectReference Include="..\DocumentProcessor.Core\DocumentProcessor.Core.csproj" />
-  </ItemGroup>
-
-  <!-- Copy scoped CSS bundle to wwwroot after build for cross-platform compatibility -->
-  <Target Name="CopyScopedCssToWwwroot" AfterTargets="GenerateScopedCssFiles" Condition="Exists('$(IntermediateOutputPath)scopedcss\bundle\$(AssemblyName).styles.css')">
-    <Copy SourceFiles="$(IntermediateOutputPath)scopedcss\bundle\$(AssemblyName).styles.css" DestinationFolder="$(ProjectDir)wwwroot\" SkipUnchangedFiles="true" />
-    <Message Importance="high" Text="Copied scoped CSS to wwwroot: $(AssemblyName).styles.css" />
-  </Target>
-
-  <!-- Exclude the wwwroot copy from static web assets to avoid duplicates -->
-  <ItemGroup>
-    <Content Remove="wwwroot\$(AssemblyName).styles.css" />
-    <None Include="wwwroot\$(AssemblyName).styles.css" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
