@@ -115,14 +115,10 @@ public static class InfrastructureServiceCollectionExtensions
         {
             logger.LogInformation("Ensuring database exists...");
 
-            // In development, drop and recreate the database to ensure schema is up to date
-            // This is safe for development but should NEVER be done in production
-            if (hostEnvironment.IsDevelopment())
-            {
-                logger.LogWarning("Development mode: Dropping and recreating database to ensure schema is current");
-                await context.Database.EnsureDeletedAsync();
-                logger.LogInformation("Database dropped successfully");
-            }
+            // Always drop and recreate the database to ensure schema is up to date
+            logger.LogWarning("Dropping and recreating database to ensure schema is current");
+            await context.Database.EnsureDeletedAsync();
+            logger.LogInformation("Database dropped successfully");
 
             // Create database from model without running migrations
             // This will create the database with all tables, indexes, and relationships
