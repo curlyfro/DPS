@@ -1,0 +1,15 @@
+{
+  "DocumentProcessor.Core": [],
+  "DocumentProcessor.Infrastructure": [
+    "AWSSDK.S3",
+    "AWSSDK.TranscribeService",
+    "Microsoft.Extensions.Configuration.Json",
+    "NAudio",
+    "PdfPig",
+    "SixLabors.ImageSharp"
+  ],
+  "DocumentProcessor.Application": [],
+  "DocumentProcessor.Web": [
+    "Npgsql.EntityFrameworkCore.PostgreSQL"
+  ]
+}

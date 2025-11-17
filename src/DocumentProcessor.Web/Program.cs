@@ -195,9 +195,9 @@ app.MapGet("/admin/cleanup-stuck-documents", async (IServiceProvider services) =
 {
     using var scope = services.CreateScope();
     var backgroundService = scope.ServiceProvider.GetRequiredService<DocumentProcessor.Application.Services.IBackgroundDocumentProcessingService>();
-    
+
     await backgroundService.CleanupStuckDocumentsAsync(30); // 30 minutes timeout
-    
+
     return Results.Ok(new { message = "Stuck documents cleanup initiated" });
 });
 
