@@ -10,7 +10,7 @@
                 },
     "AllowedHosts":  "*",
     "ConnectionStrings":  {
-                              "DefaultConnection":  "Server=full-stack-dotnet-and-sql-server-moder-mam319sqldb-94qfcoz37v5l.ccv8q42eehj5.us-east-1.rds.amazonaws.com,1433;Database=DPS;User Id=admin;Password=O65PXKsFASZTJ9JBsFmifKLJM5b7w4;TrustServerCertificate=true;MultipleActiveResultSets=true"
+                              "DefaultConnection":  "Server=full-stack-dotnet-and-sql-server-moder-mam319sqldb-nootro5dtpmg.cnbm48d1xvij.us-east-1.rds.amazonaws.com,1433;MultipleActiveResultSets=true;TrustServerCertificate=true;Integrated Security=false;Database=DPS"
                           },
     "DocumentProcessing":  {
                                "StoragePath":  "uploads",
