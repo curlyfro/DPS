@@ -1,4 +1,4 @@
-using DocumentProcessor.Core.Interfaces;
+﻿using DocumentProcessor.Core.Interfaces;
 using DocumentProcessor.Infrastructure.AI;
 using DocumentProcessor.Infrastructure.BackgroundTasks;
 using DocumentProcessor.Infrastructure.Data;
@@ -20,7 +20,7 @@ public static class InfrastructureServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        // Add Entity Framework - Always use SQL Server (RDS)
+        // Add Entity Framework - Always use PostgreSQL (RDS)
         // Default: Use AWS Secrets Manager
         // Fallback: Use local connection string from configuration
         string connectionString;
@@ -41,7 +41,7 @@ public static class InfrastructureServiceCollectionExtensions
             connectionString = localConnectionString;
         }
 
-        services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(connectionString));
+        services.AddDbContext<ApplicationDbContext>(options => options.UseNpgsql(connectionString));
 
         // Register repositories
         services.AddScoped<IDocumentRepository, DocumentRepository>();
@@ -141,55 +141,72 @@ public static class InfrastructureServiceCollectionExtensions
                 // Create database view for document summaries
                 logger.LogInformation("Creating database view: vw_DocumentSummary");
                 await context.Database.ExecuteSqlRawAsync(@"
-                    CREATE VIEW vw_DocumentSummary AS
+                    CREATE VIEW dps_dbo.vw_DocumentSummary AS
                     SELECT
-                        DocumentTypeName,
-                        Status,
+                        documenttypename,
+                        status,
                         COUNT(*) AS DocumentCount,
-                        AVG(DATEDIFF(SECOND, UploadedAt, COALESCE(ProcessedAt, GETUTCDATE()))) AS AvgProcessingTimeSeconds,
-                        MIN(UploadedAt) AS FirstUploadedAt,
-                        MAX(UploadedAt) AS LastUploadedAt
-                    FROM Documents
-                    WHERE IsDeleted = 0
-                    GROUP BY DocumentTypeName, Status
+                        AVG(EXTRACT(EPOCH FROM (COALESCE(processedat, NOW() AT TIME ZONE 'UTC') - uploadedat))) AS AvgProcessingTimeSeconds,
+                        MIN(uploadedat) AS FirstUploadedAt,
+                        MAX(uploadedat) AS LastUploadedAt
+                    FROM dps_dbo.documents
+                    WHERE isdeleted = 0
+                    GROUP BY documenttypename, status
                 ");
                 logger.LogInformation("Created view: vw_DocumentSummary");
 
-                // Create stored procedure for getting recent documents
-                logger.LogInformation("Creating stored procedure: sp_GetRecentDocuments");
+                // Create stored procedure (function) for getting recent documents
+                logger.LogInformation("Creating stored function: sp_GetRecentDocuments");
                 await context.Database.ExecuteSqlRawAsync(@"
-                    CREATE PROCEDURE sp_GetRecentDocuments
-                        @Days INT = 7,
-                        @Status INT = NULL,
-                        @DocumentTypeName NVARCHAR(200) = NULL
-                    AS
+                    CREATE OR REPLACE FUNCTION dps_dbo.sp_GetRecentDocuments(
+                        p_Days INT DEFAULT 7,
+                        p_Status INT DEFAULT NULL,
+                        p_DocumentTypeName VARCHAR(200) DEFAULT NULL
+                    )
+                    RETURNS TABLE (
+                        Id UUID,
+                        FileName VARCHAR(500),
+                        FileExtension VARCHAR(50),
+                        StoragePath VARCHAR(1000),
+                        FileSize BIGINT,
+                        DocumentTypeName VARCHAR(255),
+                        DocumentTypeCategory VARCHAR(100),
+                        Status INT,
+                        ProcessingStatus VARCHAR(50),
+                        Summary TEXT,
+                        UploadedAt TIMESTAMP,
+                        ProcessedAt TIMESTAMP,
+                        ProcessingStartedAt TIMESTAMP,
+                        ProcessingCompletedAt TIMESTAMP
+                    )
+                    AS $$
                     BEGIN
-                        SET NOCOUNT ON;
-
+                        RETURN QUERY
                         SELECT
-                            Id,
-                            FileName,
-                            FileExtension,
-                            StoragePath,
-                            FileSize,
-                            DocumentTypeName,
-                            DocumentTypeCategory,
-                            Status,
-                            ProcessingStatus,
-                            Summary,
-                            UploadedAt,
-                            ProcessedAt,
-                            ProcessingStartedAt,
-                            ProcessingCompletedAt
-                        FROM Documents
-                        WHERE IsDeleted = 0
-                            AND UploadedAt >= DATEADD(DAY, -@Days, GETUTCDATE())
-                            AND (@Status IS NULL OR Status = @Status)
-                            AND (@DocumentTypeName IS NULL OR DocumentTypeName = @DocumentTypeName)
-                        ORDER BY UploadedAt DESC
-                    END
+                            d.id,
+                            d.filename,
+                            d.fileextension,
+                            d.storagepath,
+                            d.filesize,
+                            d.documenttypename,
+                            d.documenttypecategory,
+                            d.status,
+                            d.processingstatus,
+                            d.summary,
+                            d.uploadedat,
+                            d.processedat,
+                            d.processingstartedat,
+                            d.processingcompletedat
+                        FROM dps_dbo.documents d
+                        WHERE d.isdeleted = 0
+                            AND d.uploadedat >= (NOW() AT TIME ZONE 'UTC') - (p_Days || ' days')::INTERVAL
+                            AND (p_Status IS NULL OR d.status = p_Status)
+                            AND (p_DocumentTypeName IS NULL OR d.documenttypename = p_DocumentTypeName)
+                        ORDER BY d.uploadedat DESC;
+                    END;
+                    $$ LANGUAGE plpgsql;
                 ");
-                logger.LogInformation("Created stored procedure: sp_GetRecentDocuments");
+                logger.LogInformation("Created stored function: sp_GetRecentDocuments");
             }
             else
             {
@@ -204,7 +221,7 @@ public static class InfrastructureServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Builds a SQL Server connection string from AWS Secrets Manager
+    /// Builds a PostgreSQL connection string from AWS Secrets Manager
     /// </summary>
     private static async Task<string> BuildConnectionStringFromSecretsManager()
     {
@@ -218,8 +235,8 @@ public static class InfrastructureServiceCollectionExtensions
         var port = secretsService.GetFieldFromSecret(secretJson, "port");
         var dbname = secretsService.GetFieldFromSecret(secretJson, "dbname");
 
-        // Build SQL Server connection string
-        var connectionString = $"Server={host},{port};Database={dbname};User Id={username};Password={password};TrustServerCertificate=true;MultipleActiveResultSets=true";
+        // Build PostgreSQL connection string
+        var connectionString = $"Host={host};Port={port};Database={dbname};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true";
 
         return connectionString;
     }

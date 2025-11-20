@@ -1,11 +1,9 @@
 using DocumentProcessor.Infrastructure;
 using DocumentProcessor.Infrastructure.Data;
-using DocumentProcessor.Web.Components;
 using DocumentProcessor.Application;
 using DocumentProcessor.Core.Entities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.RateLimiting;
-using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.StaticFiles;
 using System.IO;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.FileProviders;
@@ -48,20 +46,7 @@ builder.Services.AddLogging(logging =>
     logging.AddFilter("Microsoft.AspNetCore.SignalR", LogLevel.Debug);
 });
 
-// Add rate limiting (simplified for now - can be enhanced later)
-builder.Services.AddRateLimiter(options =>
-{
-    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.User.Identity?.Name ?? httpContext.Request.Headers.Host.ToString(),
-            factory: partition => new FixedWindowRateLimiterOptions
-            {
-                AutoReplenishment = true,
-                PermitLimit = 100,
-                QueueLimit = 20,
-                Window = TimeSpan.FromMinutes(1)
-            }));
-});
+
 
 // Add response compression
 builder.Services.AddResponseCompression(options =>
@@ -147,9 +132,6 @@ app.UseHttpsRedirection();
 // Add response compression
 app.UseResponseCompression();
 
-// Add rate limiting
-app.UseRateLimiter();
-
 app.UseAntiforgery();
 
 // Serve static files from wwwroot with explicit MIME type for scoped CSS
@@ -176,7 +158,7 @@ app.UseStaticFiles(new StaticFileOptions
     RequestPath = "/uploads"
 });
 
-app.MapRazorComponents<App>()
+app.MapRazorComponents<DocumentProcessor.Web.Components.App>()
     .AddInteractiveServerRenderMode();
 
 // Map health check endpoints
@@ -195,9 +177,9 @@ app.MapGet("/admin/cleanup-stuck-documents", async (IServiceProvider services) =
 {
     using var scope = services.CreateScope();
     var backgroundService = scope.ServiceProvider.GetRequiredService<DocumentProcessor.Application.Services.IBackgroundDocumentProcessingService>();
-    
+
     await backgroundService.CleanupStuckDocumentsAsync(30); // 30 minutes timeout
-    
+
     return Results.Ok(new { message = "Stuck documents cleanup initiated" });
 });
 

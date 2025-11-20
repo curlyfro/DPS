@@ -1,0 +1,223 @@
+==========
+References
+==========
+DocumentProcessor.Infrastructure
+DocumentProcessor.Infrastructure.Data
+DocumentProcessor.Application
+DocumentProcessor.Core.Entities
+Microsoft.EntityFrameworkCore
+Microsoft.AspNetCore.StaticFiles
+System.IO
+Microsoft.AspNetCore.Builder
+Microsoft.Extensions.FileProviders
+System
+System.Collections.Generic
+System.Linq
+System.Net.Http
+System.Threading
+System.Threading.Tasks
+System.Net.Http.Json
+Microsoft.AspNetCore.Hosting
+Microsoft.AspNetCore.Http
+Microsoft.Extensions.Configuration
+Microsoft.Extensions.DependencyInjection
+Microsoft.Extensions.Hosting
+Microsoft.Extensions.Logging
+project.all
+System.ComponentModel.DataAnnotations.Schema
+System.ComponentModel.DataAnnotations
+DocumentProcessor.Core.Interfaces
+System.Linq.Expressions
+DocumentProcessor.Infrastructure.AI
+Microsoft.Extensions.Options
+Amazon.BedrockRuntime
+Amazon.Runtime
+Amazon
+Amazon.Runtime.CredentialManagement
+Amazon.BedrockRuntime.Model
+System.Net
+System.Text
+System.Text.Json
+UglyToad.PdfPig
+UglyToad.PdfPig.Content
+UglyToad.PdfPig.DocumentLayoutAnalysis.TextExtractor
+UglyToad.PdfPig.Core
+CsvHelper
+CsvHelper.Configuration
+System.Globalization
+
+DocumentProcessor.Infrastructure.BackgroundTasks
+System.Threading.Channels
+System.Collections.Concurrent
+Microsoft.EntityFrameworkCore.Metadata.Builders
+Microsoft.EntityFrameworkCore.ChangeTracking
+DocumentProcessor.Infrastructure.Repositories
+System.Runtime.CompilerServices
+DocumentProcessor.Infrastructure.Providers
+Microsoft.Extensions.Diagnostics.HealthChecks
+Microsoft.EntityFrameworkCore.Infrastructure
+DocumentProcessor.Infrastructure.Services
+Amazon.SecretsManager
+Amazon.SecretsManager.Model
+Microsoft.EntityFrameworkCore.Metadata
+DocumentProcessor.Application.Services
+
+===============
+DownloadedFiles
+===============
+project.all.json
+system.net.http.json
+
+==============
+ProjectResults
+==============
+----------------------
+Showing results for: /QNet/site-packages/atx_dot_net_strands_cli/all_local_test_output/artifact-DocumentProcessor/artifact/sourceCode/src/DocumentProcessor.Core/DocumentProcessor.Core.csproj
+----------------------
+---------------------------
+Target Versions:
+---------------------------
+net8.0
+---------------------------
+Source Versions:
+---------------------------
+net48
+---------------------------
+Upgrade packages:
+---------------------------
+---------------------------
+Action packages:
+---------------------------
+
+----------------------
+Showing results for: /QNet/site-packages/atx_dot_net_strands_cli/all_local_test_output/artifact-DocumentProcessor/artifact/sourceCode/src/DocumentProcessor.Application/DocumentProcessor.Application.csproj
+----------------------
+---------------------------
+Target Versions:
+---------------------------
+net8.0
+---------------------------
+Source Versions:
+---------------------------
+net48
+---------------------------
+Upgrade packages:
+---------------------------
+---------------------------
+Action packages:
+---------------------------
+
+----------------------
+Showing results for: /QNet/site-packages/atx_dot_net_strands_cli/all_local_test_output/artifact-DocumentProcessor/artifact/sourceCode/src/DocumentProcessor.Web/DocumentProcessor.Web.csproj
+----------------------
+---------------------------
+Target Versions:
+---------------------------
+net8.0
+---------------------------
+Source Versions:
+---------------------------
+net48
+---------------------------
+Upgrade packages:
+---------------------------
+---------------------------
+Action packages:
+---------------------------
+
+----------------------
+Showing results for: /QNet/site-packages/atx_dot_net_strands_cli/all_local_test_output/artifact-DocumentProcessor/artifact/sourceCode/src/DocumentProcessor.Infrastructure/DocumentProcessor.Infrastructure.csproj
+----------------------
+---------------------------
+Target Versions:
+---------------------------
+net8.0
+---------------------------
+Source Versions:
+---------------------------
+net48
+---------------------------
+Upgrade packages:
+---------------------------
+---------------------------
+Action packages:
+---------------------------
+
+----------------------
+Showing results for: /QNet/site-packages/atx_dot_net_strands_cli/all_local_test_output/artifact-DocumentProcessor/artifact/sourceCode/src/DocumentProcessor.Core/DocumentProcessor.Core.csproj
+----------------------
+---------------------------
+Target Versions:
+---------------------------
+net8.0
+---------------------------
+Source Versions:
+---------------------------
+net48
+---------------------------
+Upgrade packages:
+---------------------------
+---------------------------
+Action packages:
+---------------------------
+
+----------------------
+Showing results for: /QNet/site-packages/atx_dot_net_strands_cli/all_local_test_output/artifact-DocumentProcessor/artifact/sourceCode/src/DocumentProcessor.Application/DocumentProcessor.Application.csproj
+----------------------
+---------------------------
+Target Versions:
+---------------------------
+net8.0
+---------------------------
+Source Versions:
+---------------------------
+net48
+---------------------------
+Upgrade packages:
+---------------------------
+---------------------------
+Action packages:
+---------------------------
+
+----------------------
+Showing results for: /QNet/site-packages/atx_dot_net_strands_cli/all_local_test_output/artifact-DocumentProcessor/artifact/sourceCode/src/DocumentProcessor.Infrastructure/DocumentProcessor.Infrastructure.csproj
+----------------------
+---------------------------
+Target Versions:
+---------------------------
+net8.0
+---------------------------
+Source Versions:
+---------------------------
+net48
+---------------------------
+Upgrade packages:
+---------------------------
+---------------------------
+Action packages:
+---------------------------
+
+----------------------
+Showing results for: /QNet/site-packages/atx_dot_net_strands_cli/all_local_test_output/artifact-DocumentProcessor/artifact/sourceCode/src/DocumentProcessor.Web/DocumentProcessor.Web.csproj
+----------------------
+---------------------------
+Target Versions:
+---------------------------
+net8.0
+---------------------------
+Source Versions:
+---------------------------
+net48
+---------------------------
+Upgrade packages:
+---------------------------
+---------------------------
+Action packages:
+---------------------------
+
+
+===========
+BuildErrors
+===========
+
+
